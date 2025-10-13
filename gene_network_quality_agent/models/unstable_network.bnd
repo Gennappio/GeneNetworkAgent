@@ -1,0 +1,91 @@
+// Highly unstable network with many oscillators
+// Should have many unstable nodes and oscillations
+
+node Input1 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Input2 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+// Simple oscillator
+node Oscillator1 {
+  logic = ! Oscillator1;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Another oscillator
+node Oscillator2 {
+  logic = ! Oscillator2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Coupled oscillators
+node CoupledOsc1 {
+  logic = ! CoupledOsc2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node CoupledOsc2 {
+  logic = ! CoupledOsc1;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Complex unstable circuit
+node Unstable1 {
+  logic = Input1 & ! Unstable2 & Unstable3;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Unstable2 {
+  logic = Unstable1 | ! Unstable3;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Unstable3 {
+  logic = ! Unstable1 & Unstable2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Chaotic node
+node Chaos {
+  logic = (Oscillator1 & ! Oscillator2) | (! CoupledOsc1 & CoupledOsc2) | (Unstable1 & ! Unstable2 & Unstable3);
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Node that depends on everything (should be very sensitive)
+node HyperSensitive {
+  logic = Input1 & Input2 & Oscillator1 & Oscillator2 & CoupledOsc1 & CoupledOsc2 & Unstable1 & Unstable2 & Unstable3 & Chaos;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Three-way oscillator
+node TriOsc1 {
+  logic = ! TriOsc3;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node TriOsc2 {
+  logic = ! TriOsc1;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node TriOsc3 {
+  logic = ! TriOsc2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}

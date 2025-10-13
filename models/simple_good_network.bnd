@@ -1,0 +1,54 @@
+// Simple good gene network for testing
+// Contains basic p53 pathway with proper biological logic
+
+node DNA_damage {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Growth_factors {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node p53 {
+  logic = DNA_damage;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node MDM2 {
+  logic = p53 & ! DNA_damage;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node p21 {
+  logic = p53 & ! MDM2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node BCL2 {
+  logic = Growth_factors & ! p53;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Apoptosis {
+  logic = p53 & ! BCL2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Growth_Arrest {
+  logic = p21;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Proliferation {
+  logic = Growth_factors & ! p53 & ! p21;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}

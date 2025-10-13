@@ -1,0 +1,67 @@
+// Network with contradictory biological logic
+// Should trigger validation issues
+
+node DNA_damage {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Growth_factors {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+// p53 should be activated by DNA damage, but here it's inhibited
+node p53 {
+  logic = ! DNA_damage;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// MDM2 should inhibit p53, but here it activates it
+node MDM2 {
+  logic = p53;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Apoptosis and Proliferation should be mutually exclusive, but both can be active
+node Apoptosis {
+  logic = Growth_factors;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Proliferation {
+  logic = Growth_factors;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// BCL2 should inhibit apoptosis, but here it promotes it
+node BCL2 {
+  logic = Apoptosis;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Growth arrest should stop proliferation, but both can be active
+node Growth_Arrest {
+  logic = Proliferation;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// p21 should cause growth arrest, but here it promotes proliferation
+node p21 {
+  logic = Proliferation;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Contradictory node that depends on itself positively (should oscillate)
+node SelfActivator {
+  logic = SelfActivator;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}

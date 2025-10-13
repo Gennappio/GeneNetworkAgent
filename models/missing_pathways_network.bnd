@@ -1,0 +1,65 @@
+// Network missing key biological pathways
+// Should score low on biological validation
+
+node Input1 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Input2 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Input3 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+// Random genes without biological meaning
+node RandomGene1 {
+  logic = Input1;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node RandomGene2 {
+  logic = Input2 | RandomGene1;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node RandomGene3 {
+  logic = Input3 & ! RandomGene2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node RandomGene4 {
+  logic = RandomGene1 & RandomGene3;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Missing: p53, Apoptosis, Proliferation, Growth_Arrest
+// Missing: DNA damage response
+// Missing: Cell cycle control
+// Missing: Proper transcription factors
+
+node WeirdOutput1 {
+  logic = RandomGene1 | RandomGene2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node WeirdOutput2 {
+  logic = RandomGene3 & RandomGene4;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node NonBiologicalNode {
+  logic = Input1 & Input2 & Input3;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}

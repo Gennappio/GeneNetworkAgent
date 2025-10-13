@@ -1,0 +1,62 @@
+// Network with problematic feedback loops
+// This should trigger multiple iterations due to instability
+
+node Signal1 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Signal2 {
+  rate_up = 0;
+  rate_down = 0;
+}
+
+node Gene1 {
+  logic = Signal1 & Gene2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Gene2 {
+  logic = Gene3 | Signal2;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Gene3 {
+  logic = Gene1 & ! Gene4;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Gene4 {
+  logic = Gene3 | Gene5;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Gene5 {
+  logic = Gene4 & Gene6;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+node Gene6 {
+  logic = Gene5 | Gene1;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Non-biological output
+node BadOutput {
+  logic = Gene1 & Gene2 & Gene3;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
+
+// Another problematic node
+node Oscillator {
+  logic = ! Oscillator;
+  rate_up = @logic ? 1 : 0;
+  rate_down = @logic ? 0 : 1;
+}
