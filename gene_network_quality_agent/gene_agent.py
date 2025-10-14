@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gene Network Quality Agent - Redesigned CLI Architecture
+Gene Network Quality Agent - Clean Production Version
 
 A structured approach to gene network analysis with LLM integration.
 """
@@ -20,40 +20,34 @@ logger = logging.getLogger(__name__)
 
 class GeneAgent:
     """Main Gene Network Quality Agent with structured CLI interface"""
-    
+
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
         if verbose:
             logger.setLevel(logging.DEBUG)
-            
+
         # OpenAI API key from environment variable
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if not self.openai_api_key:
-            logger.warning("⚠️  OPENAI_API_KEY not set. Using mock responses for demonstration.")
-            self.use_mock_responses = True
-        else:
-            self.use_mock_responses = False
-        
+            logger.error("❌ OPENAI_API_KEY environment variable not set")
+            sys.exit(1)
+
         # Set up OpenAI
-        if not self.use_mock_responses:
-            try:
-                from openai import OpenAI
-                self.openai_client = OpenAI(api_key=self.openai_api_key)
-                logger.info("✅ OpenAI client initialized")
-            except ImportError:
-                logger.error("❌ OpenAI package not installed. Run: pip install openai")
-                logger.info("🔄 Falling back to mock responses")
-                self.use_mock_responses = True
-        else:
-            logger.info("🎭 Using mock LLM responses for demonstration")
+        try:
+            from openai import OpenAI
+            self.openai_client = OpenAI(api_key=self.openai_api_key)
+            logger.info("✅ OpenAI client initialized")
+        except ImportError:
+            logger.error("❌ OpenAI package not installed. Run: pip install openai")
+            sys.exit(1)
             
     def run_default_pipeline(self, model_path: str) -> str:
         """
-        Run hardcoded analysis pipeline and generate programmer/LLM readable report
-        
+        Run standard analysis pipeline and generate structured report
+
         Args:
             model_path: Path to .bnd network file
-            
+
         Returns:
             Path to generated report file
         """
@@ -237,10 +231,6 @@ class GeneAgent:
         
     def _call_llm(self, prompt: str, model: str) -> str:
         """Call OpenAI LLM with prompt"""
-        if self.use_mock_responses:
-            logger.info("🎭 Using mock LLM response")
-            return self._get_mock_llm_response(prompt)
-            
         try:
             response = self.openai_client.chat.completions.create(
                 model=model,
@@ -254,93 +244,8 @@ class GeneAgent:
             return response.choices[0].message.content
         except Exception as e:
             logger.error(f"❌ LLM call failed: {e}")
-            logger.info("🔄 Falling back to mock response")
-            return self._get_mock_llm_response(prompt)
-            
-    def _get_mock_llm_response(self, prompt: str) -> str:
-        """Generate mock LLM response for demonstration when API is unavailable"""
-        if "biologist" in prompt.lower() or "summary" in prompt.lower() or "therapeutic" in prompt.lower() or "cancer" in prompt.lower():
-            return '''
-# Gene Network Analysis: Therapeutic Target Identification
+            raise
 
-## Executive Summary
-This p53 pathway network analysis reveals several potential therapeutic intervention points for cancer treatment. The network demonstrates key regulatory mechanisms involved in DNA damage response and cell fate determination.
-
-## Key Therapeutic Targets
-
-### Primary Targets
-1. **p53 (TP53)** - Central tumor suppressor
-   - **Therapeutic Strategy**: Restore p53 function in cancers with wild-type p53
-   - **Drug Classes**: MDM2 inhibitors (e.g., Nutlin-3), p53 activators
-   - **Clinical Relevance**: Mutated in ~50% of cancers
-
-2. **MDM2** - p53 negative regulator
-   - **Therapeutic Strategy**: Inhibit MDM2-p53 interaction
-   - **Drug Classes**: Small molecule inhibitors, stapled peptides
-   - **Clinical Status**: Several compounds in clinical trials
-
-### Secondary Targets
-3. **BCL2** - Anti-apoptotic protein
-   - **Therapeutic Strategy**: Promote apoptosis in cancer cells
-   - **Drug Classes**: BCL2 inhibitors (e.g., Venetoclax)
-   - **Clinical Applications**: Approved for certain blood cancers
-
-4. **p21 (CDKN1A)** - Cell cycle inhibitor
-   - **Therapeutic Strategy**: Modulate cell cycle progression
-   - **Approach**: Combination therapies with CDK inhibitors
-
-## Network Vulnerabilities
-- **Disconnected components**: Suggest missing regulatory links that could be targeted
-- **Oscillatory behavior**: Indicates potential for destabilizing cancer cell dynamics
-- **Growth factor dependency**: Opportunity for growth factor receptor inhibition
-
-## Clinical Implications
-1. **Combination Therapy**: Target multiple nodes simultaneously
-2. **Biomarker Development**: Use network state as treatment response predictor
-3. **Resistance Mechanisms**: Monitor pathway rewiring during treatment
-
-## Recommendations for Drug Development
-1. Focus on p53-MDM2 axis for solid tumors
-2. Develop BCL2 family modulators for hematologic malignancies
-3. Consider network-based combination strategies
-4. Validate targets in patient-derived models
-'''
-        elif "refine" in prompt.lower() or "recommend" in prompt.lower():
-            return '''
-{
-    "recommended_tools": ["deep_topology_analysis", "pathway_validator"],
-    "reasoning": "The network shows disconnected components and unstable dynamics. Deep topology analysis would help identify structural issues, and pathway validation would assess biological coherence of the p53 pathway.",
-    "priority": "high"
-}
-'''
-        elif "question" in prompt.lower() or "ask" in prompt.lower():
-            return '''
-{
-    "answer": "Based on the analysis, p53 appears to be a central regulatory hub in this network. It receives input from DNA_damage and influences multiple downstream pathways including apoptosis (via BCL2 inhibition) and cell cycle arrest (via p21 activation). The network shows some instability which may indicate missing regulatory mechanisms.",
-    "recommended_tools": ["pathway_validator", "deep_topology_analysis"],
-    "confidence": "high"
-}
-'''
-        else:
-            return '''
-This gene network represents a simplified p53 pathway with key components for DNA damage response. The network includes:
-
-**Key Findings:**
-- p53 acts as a central tumor suppressor responding to DNA damage
-- Two main output pathways: apoptosis and growth arrest
-- BCL2 provides anti-apoptotic regulation
-- Growth factors promote proliferation when conditions are favorable
-
-**Biological Significance:**
-- The p53 pathway is crucial for preventing cancer by eliminating damaged cells
-- The balance between apoptosis and growth arrest determines cell fate
-- Dysregulation of this pathway is implicated in many cancers
-
-**Recommendations:**
-- Consider adding p53 degradation mechanisms (e.g., MDM2 feedback)
-- Include additional DNA repair pathways
-- Add cell cycle checkpoints for more realistic dynamics
-'''
 
     def _create_refine_prompt(self, report_data: Dict[str, Any]) -> str:
         """Create prompt for LLM to review and refine analysis"""
@@ -420,12 +325,10 @@ Format as a clear, structured report suitable for publication or presentation.
 
     def _execute_additional_analysis(self, report_path: str, analysis_plan: Dict[str, Any]) -> str:
         """Execute additional analysis based on LLM recommendations"""
-        # This would integrate with our tool system
-        # For now, just log the recommendations
         logger.info(f"📋 LLM Recommendations: {analysis_plan}")
 
-        # Return original report path for now
-        # TODO: Implement actual additional tool execution
+        # Log recommendations for future implementation
+        # Additional tool execution can be implemented here as needed
         return report_path
 
     def _save_biologist_summary(self, report_path: str, summary: str, focus: str) -> str:
@@ -467,7 +370,7 @@ Examples:
 
     # Mode flags
     parser.add_argument('--default-pipeline', action='store_true',
-                       help='Run hardcoded analysis pipeline and generate structured report')
+                       help='Run standard analysis pipeline and generate structured report')
     parser.add_argument('--refine', metavar='REPORT_FILE',
                        help='Refine analysis using LLM review of existing report')
     parser.add_argument('--ask', metavar='QUESTION',

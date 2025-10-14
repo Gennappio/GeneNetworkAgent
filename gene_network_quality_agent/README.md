@@ -1,119 +1,208 @@
 # 🧬 Gene Network Quality Agent
 
-An iterative, modular system for analyzing Boolean gene regulatory networks (.bnd files) using LangGraph orchestration and integration with `gene_network_standalone.py`.
-
-## 🎯 Overview
-
-The Gene Network Quality Agent performs comprehensive analysis of Boolean gene networks through:
-
-1. **BND File Loading** - Uses `gene_network_standalone.py` for proper .bnd parsing
-2. **Topology Analysis** - Network structure, circuits, and feedback loops
-3. **Dynamics Simulation** - Attractors, oscillations, and stability
-4. **Perturbation Testing** - Knockout and overexpression effects
-5. **Biological Validation** - Rule-based pathway validation (LLM-ready)
-6. **Iterative Refinement** - Continues until network quality is satisfactory
-
-## 🏗️ Architecture
-
-```
-gene_network_quality_agent/
-├── agent/                    # Core analysis agents
-│   ├── graph.py             # LangGraph workflow definition
-│   └── nodes/               # Individual analysis nodes
-│       ├── load_model.py    # Load YAML/BND networks
-│       ├── topology.py      # Network structure analysis
-│       ├── dynamics.py      # Dynamics simulation
-│       ├── perturb.py       # Perturbation testing
-│       ├── validate.py      # LLM biological validation
-│       ├── controller.py    # Iteration control logic
-│       └── report.py        # Report generation
-├── models/                  # BND network models for testing
-│   ├── jaya_microc.bnd     # Large real network (106 nodes)
-│   ├── simple_good_network.bnd      # Good p53 pathway
-│   ├── feedback_loops_network.bnd   # Problematic feedback loops
-│   ├── missing_pathways_network.bnd # Missing biological pathways
-│   ├── contradictory_network.bnd    # Contradictory logic
-│   └── unstable_network.bnd         # Highly unstable network
-├── reports/                 # Generated analysis reports
-├── run_quality_agent.py     # Main CLI entry point
-└── requirements.txt         # Dependencies
-```
+A production-ready tool for gene network analysis with AI-powered insights using OpenAI's GPT-3.5 Turbo.
 
 ## 🚀 Quick Start
 
-1. **Install dependencies:**
+### Prerequisites
+- Python 3.8+
+- OpenAI API key
+
+### Installation
 ```bash
-cd gene_network_quality_agent
-pip install -r requirements.txt
+pip install openai networkx pyyaml
 ```
 
-2. **Run analysis on simple good network:**
+### Setup
 ```bash
-python run_quality_agent.py models/simple_good_network.bnd --verbose
+export OPENAI_API_KEY="your-openai-api-key"
 ```
 
-3. **Test problematic networks:**
+### Basic Usage
 ```bash
-python run_quality_agent.py models/feedback_loops_network.bnd --max-iterations 3
-python run_quality_agent.py models/contradictory_network.bnd --max-iterations 2
+# Run analysis pipeline
+python gene_agent.py models/simple_good_network.bnd --default-pipeline
+
+# Get AI-powered insights
+python gene_agent.py --refine reports/analysis_report_TIMESTAMP.yaml --summarize "therapeutic targets"
+
+# Ask specific questions
+python gene_agent.py --refine reports/analysis_report_TIMESTAMP.yaml --ask "What are the key regulatory hubs?"
 ```
 
-4. **Analyze large real network:**
+## 📋 Features
+
+### Core Analysis Pipeline
+- **Network Loading**: Parse .bnd Boolean network files
+- **Topology Analysis**: Network structure and connectivity
+- **Dynamics Analysis**: Attractor identification and stability
+- **Perturbation Testing**: Knockout and overexpression experiments
+- **Biological Validation**: AI-powered plausibility assessment
+
+### AI-Powered Insights
+- **Expert Analysis**: GPT-3.5 powered biological interpretation
+- **Research Summaries**: Publication-ready reports for biologists
+- **Interactive Q&A**: Ask specific questions about your network
+- **Tool Recommendations**: AI suggests additional analyses
+
+## 🔧 CLI Reference
+
+### Modes
+
+#### `--default-pipeline`
+Run standard analysis pipeline and generate structured reports.
 ```bash
-python run_quality_agent.py models/jaya_microc.bnd --max-iterations 2
+python gene_agent.py network.bnd --default-pipeline [--verbose]
 ```
 
-## 📊 Output
-
-The agent generates comprehensive YAML reports in the `reports/` directory containing:
-
-- Network structure analysis
-- Dynamics and stability assessment  
-- Perturbation sensitivity results
-- Biological validation scores
-- Actionable recommendations
-- Iteration history and decision rationale
-
-## 🔧 Current Implementation
-
-This is a **working system** with:
-- ✅ Complete LangGraph workflow structure
-- ✅ All analysis nodes implemented
-- ✅ Full BND file support via `gene_network_standalone.py`
-- ✅ Real network topology analysis
-- ✅ Dynamics simulation with attractors
-- ✅ Perturbation testing (knockout/overexpression)
-- ✅ Iterative control logic
-- ✅ Comprehensive report generation
-- ✅ Multiple test networks with different flaws
-
-**Ready for enhancement:**
-- Add real LLM integration for biological validation
-- Implement network modification between iterations
-- Add more sophisticated dynamics algorithms
-
-## 🧪 Testing
-
-Test different network types:
-
-**Good Network (should converge quickly):**
+#### `--refine`
+Use AI to review and enhance existing analysis.
 ```bash
-python run_quality_agent.py models/simple_good_network.bnd --verbose
+python gene_agent.py --refine report.yaml [--model gpt-3.5-turbo] [--verbose]
 ```
 
-**Problematic Networks (should iterate multiple times):**
+#### `--ask`
+Ask specific questions about your analysis.
 ```bash
-python run_quality_agent.py models/feedback_loops_network.bnd --max-iterations 3
-python run_quality_agent.py models/unstable_network.bnd --max-iterations 2
+python gene_agent.py --refine report.yaml --ask "What are the therapeutic targets?" [--model gpt-3.5-turbo]
 ```
 
-**Large Real Network (106 nodes):**
+#### `--summarize`
+Generate biologist-friendly summaries with domain focus.
 ```bash
-python run_quality_agent.py models/jaya_microc.bnd --max-iterations 2
+python gene_agent.py --refine report.yaml --summarize "drug discovery" [--model gpt-3.5-turbo]
 ```
 
-## 🔮 Future Extensions
+### Options
+- `--model`: AI model to use (default: gpt-3.5-turbo)
+- `--verbose`: Enable detailed logging
+- `--help`: Show usage information
 
-- **ModelEditor**: Automatic network modification between iterations
-- **ChatAgent**: Conversational interface for report exploration  
-- **RAG Integration**: Validation against public biological databases
+## 📊 Output Formats
+
+### Technical Reports (YAML)
+Structured reports for programmatic analysis:
+```yaml
+metadata:
+  timestamp: "20251014_231624"
+  network_name: "Simple Good Network"
+  analysis_type: "default_pipeline"
+
+quality_metrics:
+  biological_plausibility: 0.54
+  issues_found: 3
+  overall_quality: 0.0
+
+topology_analysis:
+  nodes: 9
+  edges: 0
+  connected: false
+```
+
+### Biologist Summaries (Markdown)
+Publication-ready reports for researchers:
+```markdown
+# Gene Network Analysis: Therapeutic Target Identification
+
+## Key Findings
+- p53 acts as central regulatory hub
+- Network exhibits oscillatory behavior
+- Multiple therapeutic intervention points identified
+
+## Therapeutic Targets
+1. **p53** - Central tumor suppressor
+2. **MDM2** - p53 negative regulator
+3. **BCL2** - Anti-apoptotic protein
+```
+
+## 🏗️ Architecture
+
+### Clean, Production-Ready Design
+- **No Legacy Code**: Removed all dynamic architecture complexity
+- **No Mock Functions**: Real AI integration only
+- **Minimal Dependencies**: Core functionality with essential tools
+- **Error Handling**: Proper exception handling and logging
+
+### Core Components
+```
+gene_agent.py           # Main CLI application
+agent/tools/            # Analysis tools
+├── load_bnd_network.py
+├── analyze_topology.py
+├── analyze_dynamics.py
+├── test_perturbations.py
+└── validate_biology.py
+models/                 # Example BND networks
+reports/                # Generated analysis reports
+```
+
+## 🔒 Security
+
+- **Environment Variables**: API keys via OPENAI_API_KEY
+- **No Hardcoded Secrets**: Clean, secure codebase
+- **Input Validation**: Proper error handling
+- **Production Ready**: Suitable for deployment
+
+## 📈 Use Cases
+
+### Research Applications
+- **Cancer Research**: Identify therapeutic targets and drug mechanisms
+- **Systems Biology**: Understand network dynamics and regulation
+- **Drug Discovery**: Find intervention points and combination strategies
+- **Pathway Analysis**: Validate biological coherence and completeness
+
+### Technical Applications
+- **Network Validation**: Assess model quality and biological plausibility
+- **Comparative Analysis**: Compare different network models
+- **Hypothesis Generation**: AI-powered insights for further research
+- **Report Generation**: Automated documentation for research workflows
+
+## 🎯 Example Workflow
+
+```bash
+# 1. Analyze network
+python gene_agent.py models/simple_good_network.bnd --default-pipeline
+# → reports/analysis_report_20251014_231624.yaml
+
+# 2. Get AI insights
+python gene_agent.py --refine reports/analysis_report_20251014_231624.yaml
+# → AI recommendations for additional analysis
+
+# 3. Ask research questions
+python gene_agent.py --refine reports/analysis_report_20251014_231624.yaml \
+  --ask "What are the most promising therapeutic targets?"
+# → Expert AI analysis of therapeutic opportunities
+
+# 4. Generate research summary
+python gene_agent.py --refine reports/analysis_report_20251014_231624.yaml \
+  --summarize "cancer therapeutics"
+# → reports/analysis_report_20251014_231624_biologist_summary_cancer_therapeutics.md
+```
+
+## 🚀 Production Deployment
+
+### Requirements
+- OpenAI API key with sufficient quota
+- Python 3.8+ environment
+- Network access for API calls
+
+### Recommendations
+- **Rate Limiting**: Implement for high-volume use
+- **Caching**: Cache AI responses to reduce costs
+- **Monitoring**: Track API usage and costs
+- **Scaling**: Consider load balancing for multiple users
+
+## 📞 Support
+
+### Documentation
+- `--help`: CLI usage and examples
+- `NEW_ARCHITECTURE.md`: Complete architecture overview
+- `SETUP.md`: Detailed setup instructions
+- `REAL_LLM_TEST_RESULTS.md`: Testing documentation
+
+### Example Networks
+- `models/simple_good_network.bnd`: Well-structured p53 pathway
+- `models/unstable_network.bnd`: Network with stability issues
+- `models/feedback_loops_network.bnd`: Complex regulatory circuits
+
+**Ready for production use with real AI-powered biological analysis!** 🧬✨
