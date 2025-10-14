@@ -60,7 +60,6 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
         "cycles": num_cycles,
         "strongly_connected_components": num_sccs,
         "connected": is_connected,
-        "graph": G,
         "cycle_details": cycles[:10]  # Store first 10 cycles
     }
     
