@@ -9,39 +9,16 @@ import argparse
 import sys
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Optional, List
 import logging
 
 # LangChain imports
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
 from langchain_community.callbacks import get_openai_callback
-from pydantic import BaseModel, Field
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# Pydantic models for structured outputs
-class AnalysisRecommendation(BaseModel):
-    """Model for LLM analysis recommendations"""
-    recommended_tools: List[str] = Field(description="List of recommended analysis tools")
-    reasoning: str = Field(description="Explanation of why these tools are recommended")
-    priority: str = Field(description="Priority level: high, medium, or low")
-
-class QuestionAnswer(BaseModel):
-    """Model for LLM question responses"""
-    answer: str = Field(description="Detailed answer to the user's question")
-    confidence: str = Field(description="Confidence level: high, medium, or low")
-    recommended_tools: List[str] = Field(description="Additional tools that might help", default=[])
-
-class BiologistSummary(BaseModel):
-    """Model for biologist-friendly summaries"""
-    summary: str = Field(description="Comprehensive summary in markdown format")
-    key_findings: List[str] = Field(description="List of key findings")
-    therapeutic_targets: List[str] = Field(description="Potential therapeutic targets", default=[])
-    recommendations: List[str] = Field(description="Research recommendations", default=[])
 
 class GeneAgent:
     """Main Gene Network Quality Agent with LangChain integration"""
@@ -70,70 +47,9 @@ class GeneAgent:
             logger.error("LangChain packages not installed. Run: pip install langchain langchain-openai")
             sys.exit(1)
 
-        # Set up output parsers
-        self.analysis_parser = JsonOutputParser(pydantic_object=AnalysisRecommendation)
-        self.question_parser = JsonOutputParser(pydantic_object=QuestionAnswer)
-        self.summary_parser = JsonOutputParser(pydantic_object=BiologistSummary)
 
-        # Create prompt templates
-        self._setup_prompt_templates()
 
-    def _setup_prompt_templates(self):
-        """Set up LangChain prompt templates"""
-        # Analysis refinement prompt
-        self.refine_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert in gene network analysis and bioinformatics. Provide structured recommendations for additional analysis."),
-            ("user", """Please review this gene network analysis report and suggest additional analyses:
 
-                NETWORK: {network_name}
-                QUALITY SCORE: {quality_score}
-                ISSUES FOUND: {issues_found}
-
-                CURRENT ANALYSIS:
-                - Topology: {topology_analysis}
-                - Dynamics: {dynamics_analysis}
-                - Biology: {biological_validation}
-
-                Based on this analysis, what additional tools or analyses would you recommend?
-                Available tools: deep_topology_analysis, pathway_validator
-
-                {format_instructions}""")
-        ])
-
-        # Question answering prompt
-        self.question_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert in gene network analysis and bioinformatics. Answer questions based on the provided analysis data."),
-            ("user", """Based on this gene network analysis report, please answer the following question:
-
-                QUESTION: {question}
-
-                NETWORK DATA:
-                - Network: {network_name}
-                - Quality Score: {quality_score}
-                - Topology: {topology_analysis}
-                - Dynamics: {dynamics_analysis}
-                - Biology: {biological_validation}
-
-                {format_instructions}""")
-        ])
-
-        # Summary generation prompt
-        self.summary_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an expert biologist creating research summaries. Generate comprehensive, publication-ready summaries."),
-            ("user", """Create a biologist-friendly summary of this gene network analysis with focus on: {focus}
-
-                NETWORK DATA:
-                - Network: {network_name}
-                - Quality Score: {quality_score}
-                - Nodes: {total_nodes}
-                - Topology: {topology_analysis}
-                - Dynamics: {dynamics_analysis}
-                - Biology: {biological_validation}
-
-                Create a comprehensive summary suitable for researchers in the field.
-
-                {format_instructions}""")
-        ])
 
     def run_default_pipeline(self, model_path: str) -> str:
         """
@@ -260,7 +176,9 @@ class GeneAgent:
 
         # Track token usage and generate summary
         with get_openai_callback() as cb:
-            result = self._generate_focused_summary(report_content, summary_focus)
+            # Import and use summary agent
+            from reasoning_agents.summary_agent import execute_natural_language
+            result = execute_natural_language(report_content, summary_focus)
             logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
 
         # Save biologist-friendly summary
@@ -313,85 +231,23 @@ class GeneAgent:
         return str(report_path)
 
     def _get_refinement_suggestions(self, report_content: str) -> tuple[str, list]:
-        """Get LLM suggestions for improving the analysis using natural language"""
-
-        # Dynamically discover available tools
-        available_tools_dict = self._discover_available_tools()
-        available_tools = [
-            f"{tool_info['display_name']} - {tool_info['definition']['description']}"
-            for tool_info in available_tools_dict.values()
-        ]
-
-        # Create a simple prompt for refinement suggestions
-        prompt = f"""You are an expert in gene network analysis. Please review this analysis report and provide suggestions for improvement or additional insights.
-
-Available analysis tools:
-{chr(10).join([f"- {tool}" for tool in available_tools])}
-
-            Report to review:
-            {report_content}
-
-            Please provide:
-            1. Key strengths of the current analysis
-            2. Areas that could be improved or expanded
-            3. Specific suggestions for additional analysis
-            4. Any potential concerns or limitations
-            5. If additional tool execution would be helpful, specify which tools should be run and why
-
-            Respond in clear, natural language suitable for researchers."""
-
+        """Get LLM suggestions for improving the analysis using reasoning agent"""
         try:
-            # Use simple chain without complex parsing
-            chain = self.llm
-            result = chain.invoke([{"role": "user", "content": prompt}])
-
-            # Parse response to extract tool recommendations
-            response_text = result.content
-            recommended_tools = self._extract_tool_recommendations(response_text)
-
-            return response_text, recommended_tools
+            # Import and use refinement agent
+            from reasoning_agents.refinement_agent import execute_natural_language
+            return execute_natural_language(report_content)
         except Exception as e:
-            logger.error(f"Refinement suggestions failed: {e}")
+            logger.error(f"Refinement agent failed: {e}")
             return f"Error generating refinement suggestions: {e}", []
 
     def _answer_question_about_report(self, report_content: str, question: str) -> tuple[str, list]:
-        """Answer specific question about the natural language report"""
-
-        # Dynamically discover available tools
-        available_tools_dict = self._discover_available_tools()
-        available_tools = [
-            f"{tool_info['display_name']} - {tool_info['definition']['description']}"
-            for tool_info in available_tools_dict.values()
-        ]
-
-        prompt = f"""You are an expert in gene network analysis. Please answer the following question based on the analysis report provided.
-
-Available analysis tools:
-{chr(10).join([f"- {tool}" for tool in available_tools])}
-
-            Question: {question}
-
-            Analysis Report:
-            {report_content}
-
-            Please provide a detailed, accurate answer based on the information in the report. If the report doesn't contain enough information to answer the question, please state that clearly and suggest what additional analysis might be needed.
-
-            If running specific analysis tools would help answer the question better, mention which tools should be executed and why.
-
-            Respond in clear, natural language suitable for researchers."""
-
+        """Answer specific question about the natural language report using reasoning agent"""
         try:
-            # Use simple chain without complex parsing
-            chain = self.llm
-            result = chain.invoke([{"role": "user", "content": prompt}])
-
-            # Parse response to extract tool recommendations
-            response_text = result.content
-            recommended_tools = self._extract_tool_recommendations(response_text)
-
-            return response_text, recommended_tools
+            # Import and use question agent
+            from reasoning_agents.question_agent import execute_natural_language
+            return execute_natural_language(report_content, question)
         except Exception as e:
-            logger.error(f"Question answering failed: {e}")
+            logger.error(f"Question agent failed: {e}")
             return f"Error processing question: {e}", []
 
     def _discover_available_tools(self) -> dict:
@@ -522,41 +378,11 @@ Available analysis tools:
             logger.error(f"Failed to extract model path from report: {e}")
             return None
 
-    def _generate_focused_summary(self, report_content: str, focus: str) -> str:
-        """Generate focused biologist-friendly summary from natural language report"""
-
-        prompt = f"""You are an expert biologist and researcher. Please create a focused summary of this gene network analysis report with emphasis on: {focus}
-
-            Original Analysis Report:
-            {report_content}
-
-            Please create a comprehensive summary that:
-            1. Highlights findings most relevant to {focus}
-            2. Explains the biological significance in accessible language
-            3. Identifies key genes, pathways, and mechanisms
-            4. Discusses potential therapeutic implications if relevant
-            5. Suggests future research directions
-
-            Format your response as a well-structured markdown document suitable for publication or presentation to biological researchers."""
-
-        try:
-            # Use simple chain without complex parsing
-            chain = self.llm
-            result = chain.invoke([{"role": "user", "content": prompt}])
-            return result.content
-        except Exception as e:
-            logger.error(f"Summary generation failed: {e}")
-            return f"Error generating summary: {e}"
 
 
 
-    def _execute_additional_analysis(self, report_path: str, analysis_plan: Dict[str, Any]) -> str:
-        """Execute additional analysis based on LLM recommendations"""
-        logger.info(f"LLM Recommendations: {analysis_plan}")
 
-        # Log recommendations for future implementation
-        # Additional tool execution can be implemented here as needed
-        return report_path
+
 
     def _save_biologist_summary(self, report_path: str, summary: str, focus: str) -> str:
         """Save biologist-friendly summary"""
