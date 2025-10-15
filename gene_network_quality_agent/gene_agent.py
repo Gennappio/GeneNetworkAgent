@@ -153,17 +153,6 @@ class GeneAgent:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
     def _save_biologist_summary(self, report_path: str, summary: str, focus: str) -> str:
         """Save biologist-friendly summary"""
         summary_path = report_path.replace('.md', f'_biologist_summary_{focus.replace(" ", "_")}.md')
