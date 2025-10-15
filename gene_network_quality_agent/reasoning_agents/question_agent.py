@@ -13,32 +13,36 @@ from langchain_community.callbacks import get_openai_callback
 
 logger = logging.getLogger(__name__)
 
-def execute_natural_language(report_content: str, question: str) -> tuple[str, list]:
+def execute_natural_language(report_content: str, question: str, model_path: str = None) -> str:
     """
-    Answer specific question about the natural language report
-    
+    Answer specific question about the natural language report with automatic tool execution
+
     Args:
         report_content: The analysis report content
         question: The specific question to answer
-        
+        model_path: Path to the model file for tool execution
+
     Returns:
-        Tuple of (answer_text, recommended_tools)
+        Complete answer including executed tool results
     """
     
     # Initialize LLM
     openai_api_key = os.getenv('OPENAI_API_KEY')
     if not openai_api_key:
-        return "Error: OPENAI_API_KEY not set", []
-    
+        return "Error: OPENAI_API_KEY not set"
+
     llm = ChatOpenAI(
         api_key=openai_api_key,
         model="gpt-3.5-turbo",
         temperature=0.1,
         max_tokens=2000
     )
-    
+
+    # Import tool execution utilities
+    from .tool_executor import discover_available_tools, extract_tool_recommendations, execute_recommended_tools
+
     # Dynamically discover available tools
-    available_tools_dict = _discover_available_tools()
+    available_tools_dict = discover_available_tools()
     available_tools = [
         f"{tool_info['display_name']} - {tool_info['definition']['description']}"
         for tool_info in available_tools_dict.values()
@@ -63,77 +67,26 @@ Respond in clear, natural language suitable for researchers."""
     try:
         # Use simple chain without complex parsing
         result = llm.invoke([{"role": "user", "content": prompt}])
-        
+
         # Parse response to extract tool recommendations
         response_text = result.content
-        recommended_tools = _extract_tool_recommendations(response_text, available_tools_dict)
-        
-        return response_text, recommended_tools
+        recommended_tools = extract_tool_recommendations(response_text, available_tools_dict)
+
+        # Execute recommended tools if model_path is available
+        if recommended_tools and model_path:
+            logger.info(f"Question agent executing recommended tools: {recommended_tools}")
+            additional_analysis = execute_recommended_tools(model_path, recommended_tools)
+            if additional_analysis:
+                response_text += f"\n\n## Additional Analysis Results\n{additional_analysis}"
+        elif recommended_tools:
+            logger.info(f"Question agent identified tools to run: {recommended_tools}, but no model path provided")
+
+        return response_text
     except Exception as e:
         logger.error(f"Question answering failed: {e}")
-        return f"Error processing question: {e}", []
+        return f"Error processing question: {e}"
 
-def _discover_available_tools() -> dict:
-    """Dynamically discover all available tools from the tools directory"""
-    tools = {}
-    tools_dir = Path("agent/tools")
-    
-    if not tools_dir.exists():
-        logger.warning(f"Tools directory not found: {tools_dir}")
-        return tools
-    
-    for tool_file in tools_dir.glob("*.py"):
-        if tool_file.name.startswith("__"):
-            continue
-            
-        try:
-            # Import the module dynamically
-            module_name = f"agent.tools.{tool_file.stem}"
-            module_parts = module_name.split('.')
-            module = __import__(module_name, fromlist=[module_parts[-1]])
-            
-            # Check if it has TOOL_DEFINITION
-            if hasattr(module, 'TOOL_DEFINITION'):
-                tool_def = module.TOOL_DEFINITION
-                if tool_def.get('enabled', True):  # Only include enabled tools
-                    tools[tool_def['name']] = {
-                        'definition': tool_def,
-                        'module': module_name,
-                        'display_name': tool_def['name'].replace('_', ' ').title()
-                    }
-                    
-        except Exception as e:
-            logger.warning(f"Failed to load tool {tool_file}: {e}")
-    
-    return tools
 
-def _extract_tool_recommendations(response_text: str, available_tools_dict: dict) -> list:
-    """Extract tool recommendations from LLM response using dynamic tool discovery"""
-    recommended_tools = []
-    
-    response_lower = response_text.lower()
-    
-    # Check for tool mentions by name and description keywords
-    for tool_name, tool_info in available_tools_dict.items():
-        tool_def = tool_info['definition']
-        display_name = tool_info['display_name']
-        
-        # Check for direct tool name mentions
-        if tool_name.lower() in response_lower or display_name.lower() in response_lower:
-            if any(trigger in response_lower for trigger in ["should be run", "recommend", "suggest", "execute", "run"]):
-                recommended_tools.append(display_name)
-                continue
-        
-        # Check for description-based keywords
-        description = tool_def.get('description', '').lower()
-        description_words = description.split()
-        
-        # If multiple description words are mentioned, consider it a recommendation
-        matches = sum(1 for word in description_words if len(word) > 3 and word in response_lower)
-        if matches >= 2 and any(trigger in response_lower for trigger in ["should be run", "recommend", "suggest", "execute", "run"]):
-            recommended_tools.append(display_name)
-    
-    return list(set(recommended_tools))  # Remove duplicates
 
 # Tool definition for dynamic discovery
 TOOL_DEFINITION = {
