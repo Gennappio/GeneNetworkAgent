@@ -200,19 +200,38 @@ class GeneAgent:
         with open(report_path, 'r') as f:
             report_content = f.read()
 
+        # Extract model path from report path for potential tool execution
+        model_path = self._extract_model_path_from_report(report_path)
+
         # Track token usage
         with get_openai_callback() as cb:
             if ask_query:
                 # Handle question answering about the report
-                result = self._answer_question_about_report(report_content, ask_query)
+                result, recommended_tools = self._answer_question_about_report(report_content, ask_query)
                 logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
                 logger.info(f"Question answered: {result[:100]}...")
+
+                # Execute recommended tools if any
+                if recommended_tools and model_path:
+                    logger.info(f"Executing recommended tools: {recommended_tools}")
+                    additional_analysis = self._execute_recommended_tools(model_path, recommended_tools)
+                    if additional_analysis:
+                        result += f"\n\n## Additional Analysis Results\n{additional_analysis}"
+
                 return result
             else:
                 # Handle analysis refinement suggestions
-                result = self._get_refinement_suggestions(report_content)
+                result, recommended_tools = self._get_refinement_suggestions(report_content)
                 logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
                 logger.info(f"Refinement suggestions provided")
+
+                # Execute recommended tools if any
+                if recommended_tools and model_path:
+                    logger.info(f"Executing recommended tools: {recommended_tools}")
+                    additional_analysis = self._execute_recommended_tools(model_path, recommended_tools)
+                    if additional_analysis:
+                        result += f"\n\n## Additional Analysis Results\n{additional_analysis}"
+
                 return result
         
     def summarize_for_biologist(self, report_path: str, summary_focus: str, model: str = "gpt-3.5-turbo") -> str:
@@ -287,11 +306,22 @@ class GeneAgent:
 
         return str(report_path)
 
-    def _get_refinement_suggestions(self, report_content: str) -> str:
+    def _get_refinement_suggestions(self, report_content: str) -> tuple[str, list]:
         """Get LLM suggestions for improving the analysis using natural language"""
+
+        available_tools = [
+            "Network Loader - loads and validates BND network files",
+            "Topology Analyzer - analyzes network structure, connectivity, cycles",
+            "Dynamics Analyzer - simulates network dynamics and attractors",
+            "Perturbation Tester - tests knockout and overexpression effects",
+            "Biology Validator - validates biological plausibility"
+        ]
 
         # Create a simple prompt for refinement suggestions
         prompt = f"""You are an expert in gene network analysis. Please review this analysis report and provide suggestions for improvement or additional insights.
+
+Available analysis tools:
+{chr(10).join([f"- {tool}" for tool in available_tools])}
 
             Report to review:
             {report_content}
@@ -301,6 +331,7 @@ class GeneAgent:
             2. Areas that could be improved or expanded
             3. Specific suggestions for additional analysis
             4. Any potential concerns or limitations
+            5. If additional tool execution would be helpful, specify which tools should be run and why
 
             Respond in clear, natural language suitable for researchers."""
 
@@ -308,15 +339,31 @@ class GeneAgent:
             # Use simple chain without complex parsing
             chain = self.llm
             result = chain.invoke([{"role": "user", "content": prompt}])
-            return result.content
+
+            # Parse response to extract tool recommendations
+            response_text = result.content
+            recommended_tools = self._extract_tool_recommendations(response_text)
+
+            return response_text, recommended_tools
         except Exception as e:
             logger.error(f"Refinement suggestions failed: {e}")
-            return f"Error generating refinement suggestions: {e}"
+            return f"Error generating refinement suggestions: {e}", []
 
-    def _answer_question_about_report(self, report_content: str, question: str) -> str:
+    def _answer_question_about_report(self, report_content: str, question: str) -> tuple[str, list]:
         """Answer specific question about the natural language report"""
 
+        available_tools = [
+            "Network Loader - loads and validates BND network files",
+            "Topology Analyzer - analyzes network structure, connectivity, cycles",
+            "Dynamics Analyzer - simulates network dynamics and attractors",
+            "Perturbation Tester - tests knockout and overexpression effects",
+            "Biology Validator - validates biological plausibility"
+        ]
+
         prompt = f"""You are an expert in gene network analysis. Please answer the following question based on the analysis report provided.
+
+Available analysis tools:
+{chr(10).join([f"- {tool}" for tool in available_tools])}
 
             Question: {question}
 
@@ -325,16 +372,106 @@ class GeneAgent:
 
             Please provide a detailed, accurate answer based on the information in the report. If the report doesn't contain enough information to answer the question, please state that clearly and suggest what additional analysis might be needed.
 
+            If running specific analysis tools would help answer the question better, mention which tools should be executed and why.
+
             Respond in clear, natural language suitable for researchers."""
 
         try:
             # Use simple chain without complex parsing
             chain = self.llm
             result = chain.invoke([{"role": "user", "content": prompt}])
-            return result.content
+
+            # Parse response to extract tool recommendations
+            response_text = result.content
+            recommended_tools = self._extract_tool_recommendations(response_text)
+
+            return response_text, recommended_tools
         except Exception as e:
             logger.error(f"Question answering failed: {e}")
-            return f"Error processing question: {e}"
+            return f"Error processing question: {e}", []
+
+    def _extract_tool_recommendations(self, response_text: str) -> list:
+        """Extract tool recommendations from LLM response"""
+        recommended_tools = []
+
+        # Simple keyword-based extraction
+        tool_keywords = {
+            "Network Loader": ["network loader", "load network", "loading", "bnd file"],
+            "Topology Analyzer": ["topology", "structure", "connectivity", "cycles", "feedback"],
+            "Dynamics Analyzer": ["dynamics", "simulation", "attractors", "stability", "temporal"],
+            "Perturbation Tester": ["perturbation", "knockout", "overexpression", "robustness"],
+            "Biology Validator": ["biological", "validation", "plausibility", "biology"]
+        }
+
+        response_lower = response_text.lower()
+
+        for tool_name, keywords in tool_keywords.items():
+            if any(keyword in response_lower for keyword in keywords):
+                if "should be run" in response_lower or "recommend" in response_lower or "suggest" in response_lower:
+                    recommended_tools.append(tool_name)
+
+        return recommended_tools
+
+    def _execute_recommended_tools(self, model_path: str, recommended_tools: list) -> str:
+        """Execute recommended tools and return results"""
+        if not recommended_tools:
+            return ""
+
+        logger.info(f"Executing recommended tools: {', '.join(recommended_tools)}")
+
+        # Map tool names to modules
+        tool_modules = {
+            "Network Loader": "agent.tools.load_bnd_network",
+            "Topology Analyzer": "agent.tools.analyze_topology",
+            "Dynamics Analyzer": "agent.tools.analyze_dynamics",
+            "Perturbation Tester": "agent.tools.test_perturbations",
+            "Biology Validator": "agent.tools.validate_biology"
+        }
+
+        results = []
+        context = f"Analyzing gene network: {model_path}"
+
+        for tool_name in recommended_tools:
+            if tool_name in tool_modules:
+                try:
+                    module_name = tool_modules[tool_name]
+                    module_parts = module_name.split('.')
+                    module = __import__(module_name, fromlist=[module_parts[-1]])
+                    result = module.execute_natural_language(context, model_path)
+                    results.append(f"## {tool_name}\n{result}\n")
+                    context += f"\n\nPrevious analysis from {tool_name}:\n{result}"
+                except Exception as e:
+                    logger.error(f"Failed to execute {tool_name}: {e}")
+                    results.append(f"## {tool_name}\nFailed to execute: {e}\n")
+
+        return "\n".join(results)
+
+    def _extract_model_path_from_report(self, report_path: str) -> str:
+        """Extract the original model path from the report file"""
+        try:
+            with open(report_path, 'r') as f:
+                content = f.read()
+
+            # Look for the network name in the report
+            import re
+            match = re.search(r'\*\*Network:\*\* (.+?)\.bnd', content)
+            if match:
+                network_name = match.group(1)
+                # Try to find the corresponding .bnd file
+                possible_paths = [
+                    f"models/{network_name}.bnd",
+                    f"{network_name}.bnd",
+                    f"../models/{network_name}.bnd"
+                ]
+
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        return path
+
+            return None
+        except Exception as e:
+            logger.error(f"Failed to extract model path from report: {e}")
+            return None
 
     def _generate_focused_summary(self, report_content: str, focus: str) -> str:
         """Generate focused biologist-friendly summary from natural language report"""
