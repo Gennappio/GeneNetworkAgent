@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Gene Network Quality Agent - Clean Production Version
+Gene Network Quality Agent - LangChain Production Version
 
-A structured approach to gene network analysis with LLM integration.
+A structured approach to gene network analysis with LLM integration using LangChain.
 """
 
 import argparse
@@ -11,15 +11,42 @@ import os
 import json
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import logging
+
+# LangChain imports
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_community.callbacks import get_openai_callback
+from pydantic import BaseModel, Field
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Pydantic models for structured outputs
+class AnalysisRecommendation(BaseModel):
+    """Model for LLM analysis recommendations"""
+    recommended_tools: List[str] = Field(description="List of recommended analysis tools")
+    reasoning: str = Field(description="Explanation of why these tools are recommended")
+    priority: str = Field(description="Priority level: high, medium, or low")
+
+class QuestionAnswer(BaseModel):
+    """Model for LLM question responses"""
+    answer: str = Field(description="Detailed answer to the user's question")
+    confidence: str = Field(description="Confidence level: high, medium, or low")
+    recommended_tools: List[str] = Field(description="Additional tools that might help", default=[])
+
+class BiologistSummary(BaseModel):
+    """Model for biologist-friendly summaries"""
+    summary: str = Field(description="Comprehensive summary in markdown format")
+    key_findings: List[str] = Field(description="List of key findings")
+    therapeutic_targets: List[str] = Field(description="Potential therapeutic targets", default=[])
+    recommendations: List[str] = Field(description="Research recommendations", default=[])
+
 class GeneAgent:
-    """Main Gene Network Quality Agent with structured CLI interface"""
+    """Main Gene Network Quality Agent with LangChain integration"""
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
@@ -32,15 +59,84 @@ class GeneAgent:
             logger.error("❌ OPENAI_API_KEY environment variable not set")
             sys.exit(1)
 
-        # Set up OpenAI
+        # Set up LangChain ChatOpenAI
         try:
-            from openai import OpenAI
-            self.openai_client = OpenAI(api_key=self.openai_api_key)
-            logger.info("✅ OpenAI client initialized")
+            self.llm = ChatOpenAI(
+                api_key=self.openai_api_key,
+                model="gpt-3.5-turbo",
+                temperature=0.1,
+                max_tokens=2000
+            )
+            logger.info("✅ LangChain ChatOpenAI initialized")
         except ImportError:
-            logger.error("❌ OpenAI package not installed. Run: pip install openai")
+            logger.error("❌ LangChain packages not installed. Run: pip install langchain langchain-openai")
             sys.exit(1)
-            
+
+        # Set up output parsers
+        self.analysis_parser = JsonOutputParser(pydantic_object=AnalysisRecommendation)
+        self.question_parser = JsonOutputParser(pydantic_object=QuestionAnswer)
+        self.summary_parser = JsonOutputParser(pydantic_object=BiologistSummary)
+
+        # Create prompt templates
+        self._setup_prompt_templates()
+
+    def _setup_prompt_templates(self):
+        """Set up LangChain prompt templates"""
+        # Analysis refinement prompt
+        self.refine_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an expert in gene network analysis and bioinformatics. Provide structured recommendations for additional analysis."),
+            ("user", """Please review this gene network analysis report and suggest additional analyses:
+
+NETWORK: {network_name}
+QUALITY SCORE: {quality_score}
+ISSUES FOUND: {issues_found}
+
+CURRENT ANALYSIS:
+- Topology: {topology_analysis}
+- Dynamics: {dynamics_analysis}
+- Biology: {biological_validation}
+
+Based on this analysis, what additional tools or analyses would you recommend?
+Available tools: deep_topology_analysis, pathway_validator
+
+{format_instructions}""")
+        ])
+
+        # Question answering prompt
+        self.question_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an expert in gene network analysis and bioinformatics. Answer questions based on the provided analysis data."),
+            ("user", """Based on this gene network analysis report, please answer the following question:
+
+QUESTION: {question}
+
+NETWORK DATA:
+- Network: {network_name}
+- Quality Score: {quality_score}
+- Topology: {topology_analysis}
+- Dynamics: {dynamics_analysis}
+- Biology: {biological_validation}
+
+{format_instructions}""")
+        ])
+
+        # Summary generation prompt
+        self.summary_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an expert biologist creating research summaries. Generate comprehensive, publication-ready summaries."),
+            ("user", """Create a biologist-friendly summary of this gene network analysis with focus on: {focus}
+
+NETWORK DATA:
+- Network: {network_name}
+- Quality Score: {quality_score}
+- Nodes: {total_nodes}
+- Topology: {topology_analysis}
+- Dynamics: {dynamics_analysis}
+- Biology: {biological_validation}
+
+Create a comprehensive summary suitable for researchers in the field.
+
+{format_instructions}""")
+        ])
+
     def run_default_pipeline(self, model_path: str) -> str:
         """
         Run standard analysis pipeline and generate structured report
@@ -97,67 +193,67 @@ class GeneAgent:
         
     def refine_analysis(self, report_path: str, ask_query: Optional[str] = None, model: str = "gpt-3.5-turbo") -> str:
         """
-        Use LLM to review report and create additional analysis pipeline
-        
+        Use LangChain to review report and create additional analysis pipeline
+
         Args:
             report_path: Path to existing report
             ask_query: Optional specific question to ask
-            model: AI model to use
-            
+            model: AI model to use (ignored, using LangChain configuration)
+
         Returns:
-            Path to updated report
+            Path to updated report or answer to question
         """
-        logger.info(f"🤖 Refining analysis using {model}")
-        
+        logger.info("🔄 Refining analysis with LangChain LLM review...")
+
         # Load existing report
         with open(report_path, 'r') as f:
             report_data = yaml.safe_load(f)
-            
-        # Create LLM prompt
-        if ask_query:
-            prompt = self._create_ask_prompt(report_data, ask_query)
-        else:
-            prompt = self._create_refine_prompt(report_data)
-            
-        # Get LLM response
-        llm_response = self._call_llm(prompt, model)
-        
-        # Parse LLM response and execute additional analysis
-        additional_analysis = self._parse_llm_response(llm_response)
-        
-        # Execute additional tools if needed
-        updated_report_path = self._execute_additional_analysis(report_path, additional_analysis)
-        
-        logger.info(f"✅ Refinement completed. Updated report: {updated_report_path}")
-        return updated_report_path
+
+        # Track token usage
+        with get_openai_callback() as cb:
+            if ask_query:
+                # Handle question answering
+                result = self._answer_question(report_data, ask_query)
+                logger.info(f"💰 Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
+                logger.info(f"✅ Question answered: {result.get('answer', 'No answer')[:100]}...")
+                return result.get('answer', 'No answer provided')
+            else:
+                # Handle analysis refinement
+                result = self._get_analysis_recommendations(report_data)
+                logger.info(f"💰 Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
+
+                # Execute additional tools if needed
+                updated_report_path = self._execute_additional_analysis(report_path, result)
+
+                logger.info(f"✅ Refinement completed. Updated report: {updated_report_path}")
+                return updated_report_path
         
     def summarize_for_biologist(self, report_path: str, summary_focus: str, model: str = "gpt-3.5-turbo") -> str:
         """
-        Generate biologist-friendly summary from technical report
-        
+        Generate biologist-friendly summary using LangChain
+
         Args:
             report_path: Path to technical report
             summary_focus: Focus area for summary
-            model: AI model to use
-            
+            model: AI model to use (ignored, using LangChain configuration)
+
         Returns:
             Path to biologist summary
         """
         logger.info(f"📝 Creating biologist summary with focus: {summary_focus}")
-        
+
         # Load technical report
         with open(report_path, 'r') as f:
             report_data = yaml.safe_load(f)
-            
-        # Create summarization prompt
-        prompt = self._create_summary_prompt(report_data, summary_focus)
-        
-        # Get LLM summary
-        summary = self._call_llm(prompt, model)
-        
+
+        # Track token usage and generate summary
+        with get_openai_callback() as cb:
+            result = self._generate_biologist_summary(report_data, summary_focus)
+            logger.info(f"💰 Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
+
         # Save biologist-friendly summary
-        summary_path = self._save_biologist_summary(report_path, summary, summary_focus)
-        
+        summary_path = self._save_biologist_summary(report_path, result.get('summary', 'No summary generated'), summary_focus)
+
         logger.info(f"✅ Biologist summary created: {summary_path}")
         return summary_path
         
@@ -228,100 +324,98 @@ class GeneAgent:
         # Simple quality calculation
         quality = plausibility * (1 - min(issues * 0.1, 0.5))
         return round(quality, 2)
-        
-    def _call_llm(self, prompt: str, model: str) -> str:
-        """Call OpenAI LLM with prompt"""
+
+    def _get_analysis_recommendations(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get LLM recommendations for additional analysis using LangChain"""
+        chain = self.refine_prompt | self.llm | self.analysis_parser
+
+        return chain.invoke({
+            "network_name": report_data.get('metadata', {}).get('network_name', 'Unknown'),
+            "quality_score": report_data.get('quality_metrics', {}).get('overall_quality', 0),
+            "issues_found": report_data.get('quality_metrics', {}).get('issues_found', 0),
+            "topology_analysis": json.dumps(report_data.get('topology_analysis', {}), indent=2),
+            "dynamics_analysis": json.dumps(report_data.get('dynamics_analysis', {}), indent=2),
+            "biological_validation": json.dumps(report_data.get('biological_validation', {}), indent=2),
+            "format_instructions": self.analysis_parser.get_format_instructions()
+        })
+
+    def _answer_question(self, report_data: Dict[str, Any], question: str) -> Dict[str, Any]:
+        """Answer specific question about analysis using LangChain"""
         try:
-            response = self.openai_client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are an expert in gene network analysis and bioinformatics."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=2000,
-                temperature=0.1
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"❌ LLM call failed: {e}")
-            raise
+            # First try with parser
+            chain = self.question_prompt | self.llm | self.question_parser
 
+            result = chain.invoke({
+                "question": question,
+                "network_name": report_data.get('metadata', {}).get('network_name', 'Unknown'),
+                "quality_score": report_data.get('quality_metrics', {}).get('overall_quality', 0),
+                "topology_analysis": json.dumps(report_data.get('topology_analysis', {}), indent=2),
+                "dynamics_analysis": json.dumps(report_data.get('dynamics_analysis', {}), indent=2),
+                "biological_validation": json.dumps(report_data.get('biological_validation', {}), indent=2),
+                "format_instructions": self.question_parser.get_format_instructions()
+            })
 
-    def _create_refine_prompt(self, report_data: Dict[str, Any]) -> str:
-        """Create prompt for LLM to review and refine analysis"""
-        return f"""
-Please review this gene network analysis report and suggest additional analyses that would be valuable:
-
-NETWORK: {report_data.get('metadata', {}).get('network_name', 'Unknown')}
-QUALITY SCORE: {report_data.get('quality_metrics', {}).get('overall_quality', 0)}
-ISSUES FOUND: {report_data.get('quality_metrics', {}).get('issues_found', 0)}
-
-CURRENT ANALYSIS:
-- Topology: {json.dumps(report_data.get('topology_analysis', {}), indent=2)}
-- Dynamics: {json.dumps(report_data.get('dynamics_analysis', {}), indent=2)}
-- Biology: {json.dumps(report_data.get('biological_validation', {}), indent=2)}
-
-Based on this analysis, what additional tools or analyses would you recommend?
-Available tools: deep_topology_analysis, pathway_validator
-
-Respond with JSON format:
-{{
-    "recommended_tools": ["tool1", "tool2"],
-    "reasoning": "Why these tools would be helpful",
-    "priority": "high/medium/low"
-}}
-"""
-
-    def _create_ask_prompt(self, report_data: Dict[str, Any], query: str) -> str:
-        """Create prompt for specific user question"""
-        return f"""
-Based on this gene network analysis report, please answer the following question:
-
-QUESTION: {query}
-
-NETWORK DATA:
-{json.dumps(report_data, indent=2)}
-
-Please provide a detailed answer and suggest any additional analyses that would help answer this question better.
-
-Respond with JSON format:
-{{
-    "answer": "Your detailed answer",
-    "recommended_tools": ["tool1", "tool2"],
-    "confidence": "high/medium/low"
-}}
-"""
-
-    def _create_summary_prompt(self, report_data: Dict[str, Any], focus: str) -> str:
-        """Create prompt for biologist summary"""
-        return f"""
-Please create a biologist-friendly summary of this gene network analysis with focus on: {focus}
-
-TECHNICAL REPORT:
-{json.dumps(report_data, indent=2)}
-
-Create a summary that:
-1. Uses biological terminology appropriate for researchers
-2. Explains the significance of findings
-3. Provides actionable insights
-4. Focuses on: {focus}
-
-Format as a clear, structured report suitable for publication or presentation.
-"""
-
-    def _parse_llm_response(self, response: str) -> Dict[str, Any]:
-        """Parse LLM JSON response"""
-        try:
-            # Try to extract JSON from response
-            import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
+            # Check if result is valid
+            if isinstance(result, dict) and 'answer' in result:
+                logger.debug(f"🔍 Question result: {result}")
+                return result
             else:
-                return {"error": "Could not parse LLM response"}
+                # Fallback: try without parser
+                logger.warning("⚠️ Parser failed, trying without parser")
+                chain_simple = self.question_prompt | self.llm
+                raw_result = chain_simple.invoke({
+                    "question": question,
+                    "network_name": report_data.get('metadata', {}).get('network_name', 'Unknown'),
+                    "quality_score": report_data.get('quality_metrics', {}).get('overall_quality', 0),
+                    "topology_analysis": json.dumps(report_data.get('topology_analysis', {}), indent=2),
+                    "dynamics_analysis": json.dumps(report_data.get('dynamics_analysis', {}), indent=2),
+                    "biological_validation": json.dumps(report_data.get('biological_validation', {}), indent=2),
+                    "format_instructions": self.question_parser.get_format_instructions()
+                })
+
+                # Try to extract JSON manually
+                import re
+                json_match = re.search(r'\{.*\}', raw_result.content, re.DOTALL)
+                if json_match:
+                    try:
+                        parsed = json.loads(json_match.group())
+                        return parsed
+                    except:
+                        pass
+
+                # Final fallback: return raw content
+                logger.debug(f"🔍 Raw result content: {raw_result.content}")
+                return {"answer": raw_result.content, "confidence": "medium", "recommended_tools": []}
+
         except Exception as e:
-            logger.error(f"❌ Failed to parse LLM response: {e}")
-            return {"error": str(e)}
+            logger.error(f"❌ Question answering failed: {e}")
+            return {"answer": f"Error processing question: {e}", "confidence": "low", "recommended_tools": []}
+
+    def _generate_biologist_summary(self, report_data: Dict[str, Any], focus: str) -> Dict[str, Any]:
+        """Generate biologist-friendly summary using LangChain"""
+        try:
+            # Use simple chain without JSON parser for summary
+            chain = self.summary_prompt | self.llm
+
+            result = chain.invoke({
+                "focus": focus,
+                "network_name": report_data.get('metadata', {}).get('network_name', 'Unknown'),
+                "quality_score": report_data.get('quality_metrics', {}).get('overall_quality', 0),
+                "total_nodes": report_data.get('network_info', {}).get('total_nodes', 0),
+                "topology_analysis": json.dumps(report_data.get('topology_analysis', {}), indent=2),
+                "dynamics_analysis": json.dumps(report_data.get('dynamics_analysis', {}), indent=2),
+                "biological_validation": json.dumps(report_data.get('biological_validation', {}), indent=2),
+                "format_instructions": "Generate a comprehensive markdown summary suitable for biologists."
+            })
+
+            # Return the content directly as summary
+            return {"summary": result.content, "key_findings": [], "therapeutic_targets": [], "recommendations": []}
+
+        except Exception as e:
+            logger.error(f"❌ Summary generation failed: {e}")
+            return {"summary": f"Error generating summary: {e}", "key_findings": [], "therapeutic_targets": [], "recommendations": []}
+
+
 
     def _execute_additional_analysis(self, report_path: str, analysis_plan: Dict[str, Any]) -> str:
         """Execute additional analysis based on LLM recommendations"""
