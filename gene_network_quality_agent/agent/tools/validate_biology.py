@@ -48,7 +48,7 @@ def execute_natural_language(context: str, model_path: str) -> str:
 **Plausibility Assessment:**
 - **Biological Score**: {plausibility:.3f} ({plausibility_assessment} biological realism)
 - **Issues Identified**: {len(issues)} potential concerns
-- **Validation Status**: {'✅ Biologically plausible' if plausibility > 0.6 else '⚠️ Some biological concerns' if plausibility > 0.4 else '❌ Significant biological issues'}
+- **Validation Status**: {'Biologically plausible' if plausibility > 0.6 else 'Some biological concerns' if plausibility > 0.4 else 'Significant biological issues'}
 
 **Key Findings:**
 {chr(10).join([f"• {issue}" for issue in issues[:3]])}{'...' if len(issues) > 3 else ''}
@@ -59,14 +59,14 @@ def execute_natural_language(context: str, model_path: str) -> str:
 **Biological Assessment:**
 The network shows {'strong biological realism' if plausibility > 0.8 else 'reasonable biological plausibility' if plausibility > 0.6 else 'moderate biological concerns' if plausibility > 0.4 else 'significant biological issues'} based on known regulatory relationships and pathway logic.
 
-{'🧬 **High biological fidelity** - the network accurately represents known biological mechanisms.' if plausibility > 0.8 else '🧬 **Good biological basis** - most regulatory relationships are biologically supported.' if plausibility > 0.6 else '⚠️ **Some biological concerns** - certain aspects may need refinement for biological accuracy.' if plausibility > 0.4 else '⚠️ **Significant biological issues** - substantial revision needed for biological realism.'}
+{'**High biological fidelity** - the network accurately represents known biological mechanisms.' if plausibility > 0.8 else '**Good biological basis** - most regulatory relationships are biologically supported.' if plausibility > 0.6 else '**Some biological concerns** - certain aspects may need refinement for biological accuracy.' if plausibility > 0.4 else '**Significant biological issues** - substantial revision needed for biological realism.'}
 
 **Research Implications**: {'The network is suitable for biological hypothesis generation and experimental design.' if plausibility > 0.6 else 'The network may require biological refinement before experimental application.' if plausibility > 0.4 else 'Significant biological validation needed before research application.'}"""
 
         return evaluation
 
     except Exception as e:
-        return f"❌ **Biological Validation Failed**: {str(e)}"
+        return f"**Biological Validation Failed**: {str(e)}"
 
 
 def _validate_biology_internal(model_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -85,11 +85,11 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     if not model_data:
         raise ValueError("model_data not found in state")
 
-    print("🔄 Validating with LLM...")
+    print("Validating with LLM...")
 
     results = validate_biological_plausibility(model_data, topology_results, dynamics_results)
 
-    print(f"✅ Validation complete:")
+    print(f"Validation complete:")
     print(f"   Biological plausibility: {results['biological_plausibility']:.2f}")
     print(f"   Issues found: {len(results['issues'])}")
     print(f"   Recommendations: {len(results['recommendations'])}")

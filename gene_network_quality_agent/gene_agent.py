@@ -54,7 +54,7 @@ class GeneAgent:
         # OpenAI API key from environment variable
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         if not self.openai_api_key:
-            logger.error("❌ OPENAI_API_KEY environment variable not set")
+            logger.error("OPENAI_API_KEY environment variable not set")
             sys.exit(1)
 
         # Set up LangChain ChatOpenAI
@@ -65,9 +65,9 @@ class GeneAgent:
                 temperature=0.1,
                 max_tokens=2000
             )
-            logger.info("✅ LangChain ChatOpenAI initialized")
+            logger.info("LangChain ChatOpenAI initialized")
         except ImportError:
-            logger.error("❌ LangChain packages not installed. Run: pip install langchain langchain-openai")
+            logger.error("LangChain packages not installed. Run: pip install langchain langchain-openai")
             sys.exit(1)
 
         # Set up output parsers
@@ -145,15 +145,15 @@ class GeneAgent:
         Returns:
             Path to generated report file
         """
-        logger.info(f"🔄 Running analysis pipeline on {model_path}")
+        logger.info(f"Running analysis pipeline on {model_path}")
 
         # Define the analysis agents in order
         agents = [
-            ("📝 Network Loader", "agent.tools.load_bnd_network"),
-            ("🔍 Topology Analyzer", "agent.tools.analyze_topology"),
-            ("⚡ Dynamics Analyzer", "agent.tools.analyze_dynamics"),
-            ("🧪 Perturbation Tester", "agent.tools.test_perturbations"),
-            ("🧬 Biology Validator", "agent.tools.validate_biology")
+            ("Network Loader", "agent.tools.load_bnd_network"),
+            ("Topology Analyzer", "agent.tools.analyze_topology"),
+            ("Dynamics Analyzer", "agent.tools.analyze_dynamics"),
+            ("Perturbation Tester", "agent.tools.test_perturbations"),
+            ("Biology Validator", "agent.tools.validate_biology")
         ]
 
         # Initialize with just the model path
@@ -176,10 +176,10 @@ class GeneAgent:
             context += f"\n\nPrevious analysis from {agent_name}:\n{agent_result}"
 
         # Generate final report
-        logger.info("📊 Generating final report...")
+        logger.info("Generating final report...")
         report_path = self._generate_natural_language_report(model_path, analysis_results)
 
-        logger.info(f"✅ Analysis pipeline completed. Report: {report_path}")
+        logger.info(f"Analysis pipeline completed. Report: {report_path}")
         return report_path
         
     def refine_analysis(self, report_path: str, ask_query: Optional[str] = None, model: str = "gpt-3.5-turbo") -> str:
@@ -194,7 +194,7 @@ class GeneAgent:
         Returns:
             Natural language response with insights or answer to question
         """
-        logger.info("🔄 Refining analysis with LangChain LLM review...")
+        logger.info("Refining analysis with LangChain LLM review...")
 
         # Load existing report (natural language)
         with open(report_path, 'r') as f:
@@ -205,14 +205,14 @@ class GeneAgent:
             if ask_query:
                 # Handle question answering about the report
                 result = self._answer_question_about_report(report_content, ask_query)
-                logger.info(f"💰 Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
-                logger.info(f"✅ Question answered: {result[:100]}...")
+                logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
+                logger.info(f"Question answered: {result[:100]}...")
                 return result
             else:
                 # Handle analysis refinement suggestions
                 result = self._get_refinement_suggestions(report_content)
-                logger.info(f"💰 Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
-                logger.info(f"✅ Refinement suggestions provided")
+                logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
+                logger.info(f"Refinement suggestions provided")
                 return result
         
     def summarize_for_biologist(self, report_path: str, summary_focus: str, model: str = "gpt-3.5-turbo") -> str:
@@ -227,7 +227,7 @@ class GeneAgent:
         Returns:
             Path to biologist summary
         """
-        logger.info(f"📝 Creating biologist summary with focus: {summary_focus}")
+        logger.info(f"Creating biologist summary with focus: {summary_focus}")
 
         # Load natural language report
         with open(report_path, 'r') as f:
@@ -236,12 +236,12 @@ class GeneAgent:
         # Track token usage and generate summary
         with get_openai_callback() as cb:
             result = self._generate_focused_summary(report_content, summary_focus)
-            logger.info(f"💰 Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
+            logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
 
         # Save biologist-friendly summary
         summary_path = self._save_biologist_summary(report_path, result, summary_focus)
 
-        logger.info(f"✅ Biologist summary created: {summary_path}")
+        logger.info(f"Biologist summary created: {summary_path}")
         return summary_path
         
     def _generate_natural_language_report(self, model_path: str, analysis_results: List[str]) -> str:
@@ -283,7 +283,7 @@ The analysis pipeline has completed successfully. Each agent has provided its sp
         with open(report_path, 'w') as f:
             f.write(report_content)
 
-        logger.info(f"📄 Natural language report: {report_path}")
+        logger.info(f"Natural language report: {report_path}")
 
         return str(report_path)
 
@@ -310,7 +310,7 @@ Respond in clear, natural language suitable for researchers."""
             result = chain.invoke([{"role": "user", "content": prompt}])
             return result.content
         except Exception as e:
-            logger.error(f"❌ Refinement suggestions failed: {e}")
+            logger.error(f"Refinement suggestions failed: {e}")
             return f"Error generating refinement suggestions: {e}"
 
     def _answer_question_about_report(self, report_content: str, question: str) -> str:
@@ -333,7 +333,7 @@ Respond in clear, natural language suitable for researchers."""
             result = chain.invoke([{"role": "user", "content": prompt}])
             return result.content
         except Exception as e:
-            logger.error(f"❌ Question answering failed: {e}")
+            logger.error(f"Question answering failed: {e}")
             return f"Error processing question: {e}"
 
     def _generate_focused_summary(self, report_content: str, focus: str) -> str:
@@ -359,14 +359,14 @@ Format your response as a well-structured markdown document suitable for publica
             result = chain.invoke([{"role": "user", "content": prompt}])
             return result.content
         except Exception as e:
-            logger.error(f"❌ Summary generation failed: {e}")
+            logger.error(f"Summary generation failed: {e}")
             return f"Error generating summary: {e}"
 
 
 
     def _execute_additional_analysis(self, report_path: str, analysis_plan: Dict[str, Any]) -> str:
         """Execute additional analysis based on LLM recommendations"""
-        logger.info(f"📋 LLM Recommendations: {analysis_plan}")
+        logger.info(f"LLM Recommendations: {analysis_plan}")
 
         # Log recommendations for future implementation
         # Additional tool execution can be implemented here as needed
@@ -438,29 +438,29 @@ Examples:
     try:
         if args.default_pipeline:
             if not args.network_file:
-                print("❌ Error: Network file required for --default-pipeline")
+                print("Error: Network file required for --default-pipeline")
                 sys.exit(1)
             report_path = agent.run_default_pipeline(args.network_file)
-            print(f"✅ Analysis complete. Report: {report_path}")
+            print(f"Analysis complete. Report: {report_path}")
 
         elif args.refine:
             if args.ask:
                 report_path = agent.refine_analysis(args.refine, ask_query=args.ask, model=args.model)
-                print(f"✅ Question answered. Updated report: {report_path}")
+                print(f"Question answered. Updated report: {report_path}")
             elif args.summarize:
                 summary_path = agent.summarize_for_biologist(args.refine, args.summarize, model=args.model)
-                print(f"✅ Summary created: {summary_path}")
+                print(f"Summary created: {summary_path}")
             else:
                 report_path = agent.refine_analysis(args.refine, model=args.model)
-                print(f"✅ Analysis refined. Updated report: {report_path}")
+                print(f"Analysis refined. Updated report: {report_path}")
 
         else:
-            print("❌ Error: Please specify a mode (--default-pipeline or --refine)")
+            print("Error: Please specify a mode (--default-pipeline or --refine)")
             parser.print_help()
             sys.exit(1)
 
     except Exception as e:
-        logger.error(f"❌ Error: {e}")
+        logger.error(f"Error: {e}")
         if args.verbose:
             import traceback
             traceback.print_exc()

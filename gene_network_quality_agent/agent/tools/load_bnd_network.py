@@ -30,7 +30,7 @@ def execute_natural_language(context: str, model_path: str) -> str:
     """
     try:
         if not StandaloneGeneNetwork:
-            return "❌ **Network Loading Failed**: StandaloneGeneNetwork not available. Cannot load BND files."
+            return "**Network Loading Failed**: StandaloneGeneNetwork not available. Cannot load BND files."
 
         # Load the BND file
         network = StandaloneGeneNetwork()
@@ -60,12 +60,12 @@ The network file was successfully parsed and loaded. The network contains {total
 
 The presence of {input_nodes} input nodes indicates the network can respond to {input_nodes} external signal{'s' if input_nodes != 1 else ''}, while {logic_nodes} internal nodes suggest {'complex' if logic_nodes > 8 else 'moderate' if logic_nodes > 4 else 'simple'} internal regulatory logic.
 
-**Network Readiness**: ✅ Ready for topology, dynamics, and biological analysis."""
+**Network Readiness**: Ready for topology, dynamics, and biological analysis."""
 
         return evaluation
 
     except Exception as e:
-        return f"❌ **Network Loading Failed**: {str(e)}"
+        return f"**Network Loading Failed**: {str(e)}"
 
 
 def execute(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -76,25 +76,25 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     if not model_path:
         raise ValueError("model_path not provided in state")
     
-    print(f"📝 Loading BND file: {model_path}")
-    
+    print(f"Loading BND file: {model_path}")
+
     if not StandaloneGeneNetwork:
         raise ImportError("StandaloneGeneNetwork not available")
-    
+
     # Load the BND file
     network = StandaloneGeneNetwork()
     nodes_created = network.load_bnd_file(model_path)
-    
+
     print(f"Loading gene network from {model_path}")
     print(f"Created {nodes_created} nodes ({len(network.input_nodes)} input nodes)")
-    
+
     # Convert to standard format
     model_data = convert_bnd_to_standard_format(network, model_path)
-    
+
     # Determine network name from file
     network_name = Path(model_path).stem.replace("_", " ").title()
-    
-    print(f"✅ Loaded BND model: {network_name}")
+
+    print(f"Loaded BND model: {network_name}")
     print(f"   Total nodes: {len(model_data['nodes'])}")
     print(f"   Input nodes: {len([n for n in model_data['nodes'].values() if n['type'] == 'input'])}")
     print(f"   Logic nodes: {len([n for n in model_data['nodes'].values() if n['type'] == 'logic'])}")

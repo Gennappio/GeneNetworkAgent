@@ -59,14 +59,14 @@ def execute_natural_language(context: str, model_path: str) -> str:
 **Perturbation Assessment:**
 The network shows {'excellent robustness' if robustness_percentage > 70 else 'good robustness' if robustness_percentage > 40 else 'limited robustness'} to genetic perturbations. {'Most regulatory elements maintain network stability when perturbed.' if robustness_percentage > 70 else 'A moderate number of elements show robust behavior.' if robustness_percentage > 40 else 'Many elements are sensitive to perturbations, suggesting potential fragility.'}
 
-{'✅ **High robustness** - network maintains function despite individual gene perturbations.' if robustness_percentage > 70 else '⚠️ **Moderate robustness** - some sensitivity to perturbations detected.' if robustness_percentage > 40 else '⚠️ **Low robustness** - network may be vulnerable to genetic perturbations.'}
+{'**High robustness** - network maintains function despite individual gene perturbations.' if robustness_percentage > 70 else '**Moderate robustness** - some sensitivity to perturbations detected.' if robustness_percentage > 40 else '**Low robustness** - network may be vulnerable to genetic perturbations.'}
 
 **Therapeutic Implications**: {'Robust nodes may be challenging therapeutic targets, while sensitive nodes could be promising intervention points.' if len(sensitive_nodes) > 0 else 'High overall robustness suggests the network has evolved strong fault tolerance.'}"""
 
         return evaluation
 
     except Exception as e:
-        return f"❌ **Perturbation Testing Failed**: {str(e)}"
+        return f"**Perturbation Testing Failed**: {str(e)}"
 
 
 def _test_perturbations_internal(model_data: Dict[str, Any], bnd_network=None) -> Dict[str, Any]:
@@ -82,11 +82,11 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     if not model_data:
         raise ValueError("model_data not found in state")
 
-    print("🔄 Analyzing perturbations...")
+    print("Analyzing perturbations...")
 
     results = test_network_perturbations(model_data)
 
-    print(f"✅ Perturbation analysis complete:")
+    print(f"Perturbation analysis complete:")
     print(f"   Knockout tests: {results['knockout_count']}")
     print(f"   Overexpression tests: {results['overexpression_count']}")
     print(f"   Robust nodes: {len(results['robust_nodes'])}")

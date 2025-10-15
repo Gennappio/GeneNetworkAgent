@@ -65,14 +65,14 @@ def execute_natural_language(context: str, model_path: str) -> str:
 **Topological Assessment:**
 The network shows {'robust' if density > 0.2 and num_cycles > 0 else 'moderate' if density > 0.1 else 'limited'} regulatory complexity. {'High connectivity and feedback loops suggest sophisticated regulatory control.' if density > 0.2 and num_cycles > 0 else 'Moderate connectivity indicates balanced regulatory interactions.' if density > 0.1 else 'Low connectivity may indicate missing regulatory relationships or a simplified model.'}
 
-{'⚠️ **Disconnected components detected** - some regulatory elements may be isolated.' if not is_connected else '✅ **Well-connected network** - all elements participate in regulatory interactions.'}
+{'**Disconnected components detected** - some regulatory elements may be isolated.' if not is_connected else '**Well-connected network** - all elements participate in regulatory interactions.'}
 
 **Implications for Dynamics**: {'Complex dynamics expected due to feedback loops and high connectivity.' if num_cycles > 0 and density > 0.2 else 'Moderate dynamics expected with some regulatory interactions.' if density > 0.1 else 'Simple dynamics likely due to limited connectivity.'}"""
 
         return evaluation
 
     except Exception as e:
-        return f"❌ **Topology Analysis Failed**: {str(e)}"
+        return f"**Topology Analysis Failed**: {str(e)}"
 
 
 def _analyze_topology_internal(model_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -134,7 +134,7 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     if not model_data:
         raise ValueError("model_data not found in state")
 
-    print("🔄 Analyzing topology...")
+    print("Analyzing topology...")
 
     # Use internal analysis function
     topology_results = _analyze_topology_internal(model_data)
@@ -146,10 +146,8 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     cycles = topology_results["cycles"]
     sccs = topology_results["sccs"]
     num_sccs = len(sccs)
-    
-    # Check connectivity
-    is_connected = nx.is_weakly_connected(G)
-    
+    is_connected = topology_results["is_connected"]
+
     results = {
         "nodes": num_nodes,
         "edges": num_edges,
@@ -159,8 +157,8 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
         "connected": is_connected,
         "cycle_details": cycles[:10]  # Store first 10 cycles
     }
-    
-    print(f"✅ Topology analysis complete:")
+
+    print(f"Topology analysis complete:")
     print(f"   Nodes: {num_nodes}")
     print(f"   Edges: {num_edges}")
     print(f"   Cycles: {num_cycles}")
