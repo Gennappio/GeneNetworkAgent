@@ -5,6 +5,75 @@ Tests network robustness through knockout and overexpression experiments
 from typing import Dict, Any, List
 
 
+def execute_natural_language(context: str, model_path: str) -> str:
+    """
+    Test network perturbations and return natural language evaluation
+
+    Args:
+        context: Previous analysis context (natural language)
+        model_path: Path to the .bnd file
+
+    Returns:
+        Natural language evaluation of perturbation testing
+    """
+    try:
+        # Load and test perturbations
+        import sys
+        from pathlib import Path
+
+        # Add parent directory to path
+        parent_dir = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(parent_dir))
+
+        from gene_network_standalone import StandaloneGeneNetwork
+        from agent.tools.load_bnd_network import convert_bnd_to_standard_format
+
+        # Load the network
+        network = StandaloneGeneNetwork()
+        network.load_bnd_file(model_path)
+        model_data = convert_bnd_to_standard_format(network, model_path)
+
+        # Perform perturbation testing
+        perturbation_results = _test_perturbations_internal(model_data, network)
+
+        # Generate natural language evaluation
+        knockout_tests = perturbation_results["knockout_tests"]
+        overexpression_tests = perturbation_results["overexpression_tests"]
+        robust_nodes = perturbation_results["robust_nodes"]
+        sensitive_nodes = [node for node in model_data["nodes"].keys() if node not in robust_nodes]
+
+        robustness_percentage = (len(robust_nodes) / len(model_data["nodes"])) * 100
+        robustness_assessment = "highly robust" if robustness_percentage > 70 else "moderately robust" if robustness_percentage > 40 else "fragile"
+
+        evaluation = f"""**Perturbation Testing Results**
+
+**Robustness Analysis:**
+- **Knockout Tests**: {knockout_tests} nodes tested
+- **Overexpression Tests**: {overexpression_tests} nodes tested
+- **Robust Nodes**: {len(robust_nodes)} out of {len(model_data['nodes'])} ({robustness_percentage:.1f}%)
+- **Network Assessment**: {robustness_assessment.title()}
+
+**Robust Elements**: {', '.join(robust_nodes[:5])}{'...' if len(robust_nodes) > 5 else ''}
+**Sensitive Elements**: {', '.join(sensitive_nodes[:5])}{'...' if len(sensitive_nodes) > 5 else ''}
+
+**Perturbation Assessment:**
+The network shows {'excellent robustness' if robustness_percentage > 70 else 'good robustness' if robustness_percentage > 40 else 'limited robustness'} to genetic perturbations. {'Most regulatory elements maintain network stability when perturbed.' if robustness_percentage > 70 else 'A moderate number of elements show robust behavior.' if robustness_percentage > 40 else 'Many elements are sensitive to perturbations, suggesting potential fragility.'}
+
+{'✅ **High robustness** - network maintains function despite individual gene perturbations.' if robustness_percentage > 70 else '⚠️ **Moderate robustness** - some sensitivity to perturbations detected.' if robustness_percentage > 40 else '⚠️ **Low robustness** - network may be vulnerable to genetic perturbations.'}
+
+**Therapeutic Implications**: {'Robust nodes may be challenging therapeutic targets, while sensitive nodes could be promising intervention points.' if len(sensitive_nodes) > 0 else 'High overall robustness suggests the network has evolved strong fault tolerance.'}"""
+
+        return evaluation
+
+    except Exception as e:
+        return f"❌ **Perturbation Testing Failed**: {str(e)}"
+
+
+def _test_perturbations_internal(model_data: Dict[str, Any], bnd_network=None) -> Dict[str, Any]:
+    """Internal perturbation testing function"""
+    return test_network_perturbations(model_data)
+
+
 def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Test network perturbations (knockout and overexpression)
@@ -12,16 +81,16 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     model_data = state.get("model_data")
     if not model_data:
         raise ValueError("model_data not found in state")
-    
+
     print("🔄 Analyzing perturbations...")
-    
+
     results = test_network_perturbations(model_data)
-    
+
     print(f"✅ Perturbation analysis complete:")
     print(f"   Knockout tests: {results['knockout_count']}")
     print(f"   Overexpression tests: {results['overexpression_count']}")
     print(f"   Robust nodes: {len(results['robust_nodes'])}")
-    
+
     return {
         "perturbation_results": results,
         "perturbations_tested": True

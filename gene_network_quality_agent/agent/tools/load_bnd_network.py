@@ -17,6 +17,57 @@ except ImportError:
     StandaloneGeneNetwork = None
 
 
+def execute_natural_language(context: str, model_path: str) -> str:
+    """
+    Load BND network file and return natural language evaluation
+
+    Args:
+        context: Previous analysis context (natural language)
+        model_path: Path to the .bnd file
+
+    Returns:
+        Natural language evaluation of the network loading process
+    """
+    try:
+        if not StandaloneGeneNetwork:
+            return "❌ **Network Loading Failed**: StandaloneGeneNetwork not available. Cannot load BND files."
+
+        # Load the BND file
+        network = StandaloneGeneNetwork()
+        nodes_created = network.load_bnd_file(model_path)
+
+        # Convert to standard format for analysis
+        model_data = convert_bnd_to_standard_format(network, model_path)
+
+        # Determine network name
+        network_name = Path(model_path).stem.replace("_", " ").title()
+
+        # Count different node types
+        input_nodes = len([n for n in model_data['nodes'].values() if n['type'] == 'input'])
+        logic_nodes = len([n for n in model_data['nodes'].values() if n['type'] == 'logic'])
+        total_nodes = len(model_data['nodes'])
+
+        # Generate natural language evaluation
+        evaluation = f"""**Network Successfully Loaded**: {network_name}
+
+**Network Composition:**
+- **Total Nodes**: {total_nodes}
+- **Input Nodes**: {input_nodes} (external signals/conditions)
+- **Logic Nodes**: {logic_nodes} (internal regulatory elements)
+
+**Loading Assessment:**
+The network file was successfully parsed and loaded. The network contains {total_nodes} regulatory elements, which suggests {'a complex' if total_nodes > 10 else 'a moderate' if total_nodes > 5 else 'a simple'} regulatory system.
+
+The presence of {input_nodes} input nodes indicates the network can respond to {input_nodes} external signal{'s' if input_nodes != 1 else ''}, while {logic_nodes} internal nodes suggest {'complex' if logic_nodes > 8 else 'moderate' if logic_nodes > 4 else 'simple'} internal regulatory logic.
+
+**Network Readiness**: ✅ Ready for topology, dynamics, and biological analysis."""
+
+        return evaluation
+
+    except Exception as e:
+        return f"❌ **Network Loading Failed**: {str(e)}"
+
+
 def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Load BND network file and convert to standard format

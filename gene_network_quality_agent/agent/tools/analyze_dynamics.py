@@ -6,26 +6,98 @@ import random
 from typing import Dict, Any, List, Set
 
 
+def execute_natural_language(context: str, model_path: str) -> str:
+    """
+    Analyze network dynamics and return natural language evaluation
+
+    Args:
+        context: Previous analysis context (natural language)
+        model_path: Path to the .bnd file
+
+    Returns:
+        Natural language evaluation of the network dynamics
+    """
+    try:
+        # Load and analyze dynamics
+        import sys
+        from pathlib import Path
+
+        # Add parent directory to path
+        parent_dir = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(parent_dir))
+
+        from gene_network_standalone import StandaloneGeneNetwork
+        from agent.tools.load_bnd_network import convert_bnd_to_standard_format
+
+        # Load the network
+        network = StandaloneGeneNetwork()
+        network.load_bnd_file(model_path)
+        model_data = convert_bnd_to_standard_format(network, model_path)
+
+        # Perform dynamics analysis
+        dynamics_results = _analyze_dynamics_internal(model_data, network)
+
+        # Generate natural language evaluation
+        num_attractors = dynamics_results["num_attractors"]
+        has_oscillations = dynamics_results["has_oscillations"]
+        unstable_nodes = dynamics_results["unstable_nodes"]
+        num_unstable = len(unstable_nodes)
+
+        # Assess dynamics characteristics
+        stability_assessment = "highly stable" if num_unstable == 0 else "moderately stable" if num_unstable < 3 else "unstable"
+        complexity_assessment = "complex" if num_attractors > 5 else "moderate" if num_attractors > 2 else "simple"
+
+        evaluation = f"""**Dynamics Analysis Results**
+
+**Attractor Landscape:**
+- **Attractors Found**: {num_attractors} stable states ({complexity_assessment} dynamics)
+- **Oscillations**: {'Detected' if has_oscillations else 'None detected'} {'(dynamic regulatory cycles)' if has_oscillations else '(steady-state behavior)'}
+
+**Network Stability:**
+- **Unstable Nodes**: {num_unstable} out of {len(model_data['nodes'])} nodes
+- **Stability Assessment**: {stability_assessment.title()}
+- **Sensitive Elements**: {', '.join(unstable_nodes[:5])}{'...' if len(unstable_nodes) > 5 else ''}
+
+**Dynamical Assessment:**
+The network exhibits {'rich dynamical behavior' if num_attractors > 3 else 'moderate dynamical complexity' if num_attractors > 1 else 'simple dynamics'} with {num_attractors} distinct stable state{'s' if num_attractors != 1 else ''}.
+
+{'⚠️ **High instability detected** - many nodes show sensitive behavior to perturbations.' if num_unstable > len(model_data['nodes']) * 0.5 else '✅ **Good stability** - most regulatory elements show robust behavior.' if num_unstable < 3 else '⚠️ **Moderate instability** - some regulatory elements are sensitive to perturbations.'}
+
+{'🔄 **Oscillatory behavior detected** - suggests active regulatory cycles and temporal dynamics.' if has_oscillations else '📍 **Steady-state behavior** - network tends toward stable equilibrium states.'}
+
+**Biological Implications**: {'Complex multi-stable behavior suggests the network can adopt multiple functional states, potentially corresponding to different cellular phenotypes.' if num_attractors > 3 else 'The network shows well-defined stable states suitable for robust cellular decision-making.' if num_attractors > 1 else 'Simple dynamics suggest a straightforward regulatory response.'}"""
+
+        return evaluation
+
+    except Exception as e:
+        return f"❌ **Dynamics Analysis Failed**: {str(e)}"
+
+
+def _analyze_dynamics_internal(model_data: Dict[str, Any], bnd_network=None) -> Dict[str, Any]:
+    """Internal dynamics analysis function"""
+    return simulate_network_dynamics(model_data, bnd_network)
+
+
 def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Analyze network dynamics through simulation
     """
     model_data = state.get("model_data")
     bnd_network = state.get("bnd_network")
-    
+
     if not model_data:
         raise ValueError("model_data not found in state")
-    
+
     print("🔄 Analyzing dynamics...")
-    
+
     # Simple dynamics simulation
     results = simulate_network_dynamics(model_data, bnd_network)
-    
+
     print(f"✅ Dynamics analysis complete:")
     print(f"   Attractors found: {results['num_attractors']}")
     print(f"   Unstable nodes: {len(results['unstable_nodes'])}")
     print(f"   Oscillations detected: {results['has_oscillations']}")
-    
+
     return {
         "dynamics_results": results,
         "dynamics_analyzed": True

@@ -5,6 +5,75 @@ Validates network biological plausibility and pathway correctness
 from typing import Dict, Any, List
 
 
+def execute_natural_language(context: str, model_path: str) -> str:
+    """
+    Validate biological plausibility and return natural language evaluation
+
+    Args:
+        context: Previous analysis context (natural language)
+        model_path: Path to the .bnd file
+
+    Returns:
+        Natural language evaluation of biological validation
+    """
+    try:
+        # Load and validate biology
+        import sys
+        from pathlib import Path
+
+        # Add parent directory to path
+        parent_dir = Path(__file__).parent.parent.parent.parent
+        sys.path.insert(0, str(parent_dir))
+
+        from gene_network_standalone import StandaloneGeneNetwork
+        from agent.tools.load_bnd_network import convert_bnd_to_standard_format
+
+        # Load the network
+        network = StandaloneGeneNetwork()
+        network.load_bnd_file(model_path)
+        model_data = convert_bnd_to_standard_format(network, model_path)
+
+        # Perform biological validation
+        validation_results = _validate_biology_internal(model_data)
+
+        # Generate natural language evaluation
+        plausibility = validation_results["plausibility"]
+        issues = validation_results["issues"]
+        recommendations = validation_results["recommendations"]
+
+        plausibility_assessment = "excellent" if plausibility > 0.8 else "good" if plausibility > 0.6 else "moderate" if plausibility > 0.4 else "poor"
+
+        evaluation = f"""**Biological Validation Results**
+
+**Plausibility Assessment:**
+- **Biological Score**: {plausibility:.3f} ({plausibility_assessment} biological realism)
+- **Issues Identified**: {len(issues)} potential concerns
+- **Validation Status**: {'✅ Biologically plausible' if plausibility > 0.6 else '⚠️ Some biological concerns' if plausibility > 0.4 else '❌ Significant biological issues'}
+
+**Key Findings:**
+{chr(10).join([f"• {issue}" for issue in issues[:3]])}{'...' if len(issues) > 3 else ''}
+
+**Recommendations:**
+{chr(10).join([f"• {rec}" for rec in recommendations[:3]])}{'...' if len(recommendations) > 3 else ''}
+
+**Biological Assessment:**
+The network shows {'strong biological realism' if plausibility > 0.8 else 'reasonable biological plausibility' if plausibility > 0.6 else 'moderate biological concerns' if plausibility > 0.4 else 'significant biological issues'} based on known regulatory relationships and pathway logic.
+
+{'🧬 **High biological fidelity** - the network accurately represents known biological mechanisms.' if plausibility > 0.8 else '🧬 **Good biological basis** - most regulatory relationships are biologically supported.' if plausibility > 0.6 else '⚠️ **Some biological concerns** - certain aspects may need refinement for biological accuracy.' if plausibility > 0.4 else '⚠️ **Significant biological issues** - substantial revision needed for biological realism.'}
+
+**Research Implications**: {'The network is suitable for biological hypothesis generation and experimental design.' if plausibility > 0.6 else 'The network may require biological refinement before experimental application.' if plausibility > 0.4 else 'Significant biological validation needed before research application.'}"""
+
+        return evaluation
+
+    except Exception as e:
+        return f"❌ **Biological Validation Failed**: {str(e)}"
+
+
+def _validate_biology_internal(model_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Internal biological validation function"""
+    return validate_biological_plausibility(model_data)
+
+
 def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validate biological plausibility of the network
@@ -12,19 +81,19 @@ def execute(state: Dict[str, Any]) -> Dict[str, Any]:
     model_data = state.get("model_data")
     topology_results = state.get("topology_results")
     dynamics_results = state.get("dynamics_results")
-    
+
     if not model_data:
         raise ValueError("model_data not found in state")
-    
+
     print("🔄 Validating with LLM...")
-    
+
     results = validate_biological_plausibility(model_data, topology_results, dynamics_results)
-    
+
     print(f"✅ Validation complete:")
     print(f"   Biological plausibility: {results['biological_plausibility']:.2f}")
     print(f"   Issues found: {len(results['issues'])}")
     print(f"   Recommendations: {len(results['recommendations'])}")
-    
+
     return {
         "validation_results": results,
         "quality_validated": True
