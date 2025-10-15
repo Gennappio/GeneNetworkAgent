@@ -9,12 +9,11 @@ import argparse
 import sys
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import List
 import logging
 
 # LangChain imports
 from langchain_openai import ChatOpenAI
-from langchain_community.callbacks import get_openai_callback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -104,88 +103,9 @@ class GeneAgent:
         logger.info(f"Analysis pipeline completed. Report: {report_path}")
         return report_path
         
-    def refine_analysis(self, report_path: str, ask_query: Optional[str] = None, model: str = "gpt-3.5-turbo") -> str:
-        """
-        Use LangChain to review natural language report and provide insights
 
-        Args:
-            report_path: Path to existing natural language report
-            ask_query: Optional specific question to ask about the report
-            model: AI model to use (ignored, using LangChain configuration)
-
-        Returns:
-            Natural language response with insights or answer to question
-        """
-        logger.info("Refining analysis with LangChain LLM review...")
-
-        # Load existing report (natural language)
-        with open(report_path, 'r') as f:
-            report_content = f.read()
-
-        # Extract model path from report path for potential tool execution
-        model_path = self._extract_model_path_from_report(report_path)
-
-        # Track token usage
-        with get_openai_callback() as cb:
-            if ask_query:
-                # Handle question answering about the report
-                result, recommended_tools = self._answer_question_about_report(report_content, ask_query)
-                logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
-                logger.info(f"Question answered: {result[:100]}...")
-
-                # Execute recommended tools if any
-                if recommended_tools and model_path:
-                    logger.info(f"Executing recommended tools: {recommended_tools}")
-                    additional_analysis = self._execute_recommended_tools(model_path, recommended_tools)
-                    if additional_analysis:
-                        result += f"\n\n## Additional Analysis Results\n{additional_analysis}"
-
-                return result
-            else:
-                # Handle analysis refinement suggestions
-                result, recommended_tools = self._get_refinement_suggestions(report_content)
-                logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
-                logger.info(f"Refinement suggestions provided")
-
-                # Execute recommended tools if any
-                if recommended_tools and model_path:
-                    logger.info(f"Executing recommended tools: {recommended_tools}")
-                    additional_analysis = self._execute_recommended_tools(model_path, recommended_tools)
-                    if additional_analysis:
-                        result += f"\n\n## Additional Analysis Results\n{additional_analysis}"
-
-                return result
         
-    def summarize_for_biologist(self, report_path: str, summary_focus: str, model: str = "gpt-3.5-turbo") -> str:
-        """
-        Generate biologist-friendly summary from natural language report
 
-        Args:
-            report_path: Path to natural language report
-            summary_focus: Focus area for summary
-            model: AI model to use (ignored, using LangChain configuration)
-
-        Returns:
-            Path to biologist summary
-        """
-        logger.info(f"Creating biologist summary with focus: {summary_focus}")
-
-        # Load natural language report
-        with open(report_path, 'r') as f:
-            report_content = f.read()
-
-        # Track token usage and generate summary
-        with get_openai_callback() as cb:
-            # Import and use summary agent
-            from reasoning_agents.summary_agent import execute_natural_language
-            result = execute_natural_language(report_content, summary_focus)
-            logger.info(f"Token usage: {cb.total_tokens} tokens, ${cb.total_cost:.4f}")
-
-        # Save biologist-friendly summary
-        summary_path = self._save_biologist_summary(report_path, result, summary_focus)
-
-        logger.info(f"Biologist summary created: {summary_path}")
-        return summary_path
         
     def _generate_natural_language_report(self, model_path: str, analysis_results: List[str]) -> str:
         """Generate natural language report from agent evaluations"""
@@ -230,25 +150,7 @@ class GeneAgent:
 
         return str(report_path)
 
-    def _get_refinement_suggestions(self, report_content: str) -> tuple[str, list]:
-        """Get LLM suggestions for improving the analysis using reasoning agent"""
-        try:
-            # Import and use refinement agent
-            from reasoning_agents.refinement_agent import execute_natural_language
-            return execute_natural_language(report_content)
-        except Exception as e:
-            logger.error(f"Refinement agent failed: {e}")
-            return f"Error generating refinement suggestions: {e}", []
 
-    def _answer_question_about_report(self, report_content: str, question: str) -> tuple[str, list]:
-        """Answer specific question about the natural language report using reasoning agent"""
-        try:
-            # Import and use question agent
-            from reasoning_agents.question_agent import execute_natural_language
-            return execute_natural_language(report_content, question)
-        except Exception as e:
-            logger.error(f"Question agent failed: {e}")
-            return f"Error processing question: {e}", []
 
     def _discover_available_tools(self) -> dict:
         """Dynamically discover all available tools from the tools directory"""
@@ -456,15 +358,51 @@ def main():
             print(f"Analysis complete. Report: {report_path}")
 
         elif args.refine:
+            # Load the report content
+            with open(args.refine, 'r') as f:
+                report_content = f.read()
+
             if args.ask:
-                answer = agent.refine_analysis(args.refine, ask_query=args.ask, model=args.model)
+                # Use question agent directly
+                from reasoning_agents.question_agent import execute_natural_language
+                answer, recommended_tools = execute_natural_language(report_content, args.ask)
                 print(answer)
+
+                # Execute recommended tools if any
+                if recommended_tools:
+                    model_path = agent._extract_model_path_from_report(args.refine)
+                    if model_path:
+                        additional_analysis = agent._execute_recommended_tools(model_path, recommended_tools)
+                        if additional_analysis:
+                            print(f"\n## Additional Analysis Results\n{additional_analysis}")
+
             elif args.summarize:
-                summary_path = agent.summarize_for_biologist(args.refine, args.summarize, model=args.model)
+                # Use summary agent directly
+                from reasoning_agents.summary_agent import execute_natural_language
+                summary = execute_natural_language(report_content, args.summarize)
+
+                # Save the summary
+                summary_path = args.refine.replace('.md', f'_biologist_summary_{args.summarize.replace(" ", "_")}.md')
+                with open(summary_path, 'w') as f:
+                    f.write(f"# Gene Network Analysis Summary\n\n")
+                    f.write(f"**Focus:** {args.summarize}\n\n")
+                    f.write(f"**Source Report:** {args.refine}\n\n")
+                    f.write(summary)
                 print(f"Summary created: {summary_path}")
+
             else:
-                report_path = agent.refine_analysis(args.refine, model=args.model)
-                print(f"Analysis refined. Updated report: {report_path}")
+                # Use refinement agent directly
+                from reasoning_agents.refinement_agent import execute_natural_language
+                suggestions, recommended_tools = execute_natural_language(report_content)
+                print(suggestions)
+
+                # Execute recommended tools if any
+                if recommended_tools:
+                    model_path = agent._extract_model_path_from_report(args.refine)
+                    if model_path:
+                        additional_analysis = agent._execute_recommended_tools(model_path, recommended_tools)
+                        if additional_analysis:
+                            print(f"\n## Additional Analysis Results\n{additional_analysis}")
 
         else:
             print("Error: Please specify a mode (--default-pipeline or --refine)")
