@@ -147,13 +147,19 @@ class GeneAgent:
         """
         logger.info(f"Running analysis pipeline on {model_path}")
 
-        # Define the analysis agents in order
+        # Dynamically discover and order analysis agents
+        available_tools_dict = self._discover_available_tools()
+
+        # Sort tools by priority (higher priority first)
+        sorted_tools = sorted(
+            available_tools_dict.items(),
+            key=lambda x: x[1]['definition'].get('priority', 50),
+            reverse=True
+        )
+
         agents = [
-            ("Network Loader", "agent.tools.load_bnd_network"),
-            ("Topology Analyzer", "agent.tools.analyze_topology"),
-            ("Dynamics Analyzer", "agent.tools.analyze_dynamics"),
-            ("Perturbation Tester", "agent.tools.test_perturbations"),
-            ("Biology Validator", "agent.tools.validate_biology")
+            (tool_info['display_name'], tool_info['module'])
+            for _, tool_info in sorted_tools
         ]
 
         # Initialize with just the model path
@@ -309,12 +315,11 @@ class GeneAgent:
     def _get_refinement_suggestions(self, report_content: str) -> tuple[str, list]:
         """Get LLM suggestions for improving the analysis using natural language"""
 
+        # Dynamically discover available tools
+        available_tools_dict = self._discover_available_tools()
         available_tools = [
-            "Network Loader - loads and validates BND network files",
-            "Topology Analyzer - analyzes network structure, connectivity, cycles",
-            "Dynamics Analyzer - simulates network dynamics and attractors",
-            "Perturbation Tester - tests knockout and overexpression effects",
-            "Biology Validator - validates biological plausibility"
+            f"{tool_info['display_name']} - {tool_info['definition']['description']}"
+            for tool_info in available_tools_dict.values()
         ]
 
         # Create a simple prompt for refinement suggestions
@@ -352,12 +357,11 @@ Available analysis tools:
     def _answer_question_about_report(self, report_content: str, question: str) -> tuple[str, list]:
         """Answer specific question about the natural language report"""
 
+        # Dynamically discover available tools
+        available_tools_dict = self._discover_available_tools()
         available_tools = [
-            "Network Loader - loads and validates BND network files",
-            "Topology Analyzer - analyzes network structure, connectivity, cycles",
-            "Dynamics Analyzer - simulates network dynamics and attractors",
-            "Perturbation Tester - tests knockout and overexpression effects",
-            "Biology Validator - validates biological plausibility"
+            f"{tool_info['display_name']} - {tool_info['definition']['description']}"
+            for tool_info in available_tools_dict.values()
         ]
 
         prompt = f"""You are an expert in gene network analysis. Please answer the following question based on the analysis report provided.
@@ -390,27 +394,70 @@ Available analysis tools:
             logger.error(f"Question answering failed: {e}")
             return f"Error processing question: {e}", []
 
+    def _discover_available_tools(self) -> dict:
+        """Dynamically discover all available tools from the tools directory"""
+        tools = {}
+        tools_dir = Path("agent/tools")
+
+        if not tools_dir.exists():
+            logger.warning(f"Tools directory not found: {tools_dir}")
+            return tools
+
+        for tool_file in tools_dir.glob("*.py"):
+            if tool_file.name.startswith("__"):
+                continue
+
+            try:
+                # Import the module dynamically
+                module_name = f"agent.tools.{tool_file.stem}"
+                module_parts = module_name.split('.')
+                module = __import__(module_name, fromlist=[module_parts[-1]])
+
+                # Check if it has TOOL_DEFINITION
+                if hasattr(module, 'TOOL_DEFINITION'):
+                    tool_def = module.TOOL_DEFINITION
+                    if tool_def.get('enabled', True):  # Only include enabled tools
+                        tools[tool_def['name']] = {
+                            'definition': tool_def,
+                            'module': module_name,
+                            'display_name': tool_def['name'].replace('_', ' ').title()
+                        }
+
+            except Exception as e:
+                logger.warning(f"Failed to load tool {tool_file}: {e}")
+
+        return tools
+
     def _extract_tool_recommendations(self, response_text: str) -> list:
-        """Extract tool recommendations from LLM response"""
+        """Extract tool recommendations from LLM response using dynamic tool discovery"""
         recommended_tools = []
 
-        # Simple keyword-based extraction
-        tool_keywords = {
-            "Network Loader": ["network loader", "load network", "loading", "bnd file"],
-            "Topology Analyzer": ["topology", "structure", "connectivity", "cycles", "feedback"],
-            "Dynamics Analyzer": ["dynamics", "simulation", "attractors", "stability", "temporal"],
-            "Perturbation Tester": ["perturbation", "knockout", "overexpression", "robustness"],
-            "Biology Validator": ["biological", "validation", "plausibility", "biology"]
-        }
+        # Get available tools dynamically
+        available_tools = self._discover_available_tools()
 
         response_lower = response_text.lower()
 
-        for tool_name, keywords in tool_keywords.items():
-            if any(keyword in response_lower for keyword in keywords):
-                if "should be run" in response_lower or "recommend" in response_lower or "suggest" in response_lower:
-                    recommended_tools.append(tool_name)
+        # Check for tool mentions by name and description keywords
+        for tool_name, tool_info in available_tools.items():
+            tool_def = tool_info['definition']
+            display_name = tool_info['display_name']
 
-        return recommended_tools
+            # Check for direct tool name mentions
+            if tool_name.lower() in response_lower or display_name.lower() in response_lower:
+                if any(trigger in response_lower for trigger in ["should be run", "recommend", "suggest", "execute", "run"]):
+                    recommended_tools.append(display_name)
+                    continue
+
+            # Check for description-based keywords
+            description = tool_def.get('description', '').lower()
+            description_words = description.split()
+
+            # If multiple description words are mentioned, consider it a recommendation
+            matches = sum(1 for word in description_words if len(word) > 3 and word in response_lower)
+            if matches >= 2 and any(trigger in response_lower for trigger in ["should be run", "recommend", "suggest", "execute", "run"]):
+                recommended_tools.append(display_name)
+
+        return list(set(recommended_tools))  # Remove duplicates
 
     def _execute_recommended_tools(self, model_path: str, recommended_tools: list) -> str:
         """Execute recommended tools and return results"""
@@ -419,14 +466,14 @@ Available analysis tools:
 
         logger.info(f"Executing recommended tools: {', '.join(recommended_tools)}")
 
-        # Map tool names to modules
-        tool_modules = {
-            "Network Loader": "agent.tools.load_bnd_network",
-            "Topology Analyzer": "agent.tools.analyze_topology",
-            "Dynamics Analyzer": "agent.tools.analyze_dynamics",
-            "Perturbation Tester": "agent.tools.test_perturbations",
-            "Biology Validator": "agent.tools.validate_biology"
-        }
+        # Get available tools dynamically
+        available_tools_dict = self._discover_available_tools()
+
+        # Create mapping from display names to modules
+        tool_modules = {}
+        for tool_name, tool_info in available_tools_dict.items():
+            display_name = tool_info['display_name']
+            tool_modules[display_name] = tool_info['module']
 
         results = []
         context = f"Analyzing gene network: {model_path}"
@@ -443,6 +490,8 @@ Available analysis tools:
                 except Exception as e:
                     logger.error(f"Failed to execute {tool_name}: {e}")
                     results.append(f"## {tool_name}\nFailed to execute: {e}\n")
+            else:
+                logger.warning(f"Tool not found: {tool_name}. Available tools: {list(tool_modules.keys())}")
 
         return "\n".join(results)
 
